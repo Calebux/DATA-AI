@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { getSupabase } from '@/lib/supabase'
 import OrchestratorModal from '@/components/orchestrator-modal/OrchestratorModal'
+import NewWorkflowModal from '@/components/new-workflow-modal/NewWorkflowModal'
 import { Spinner } from '@/components/ui/spinner'
 import type { Workflow, WorkflowRun } from '@/types'
 import { formatRelative } from '@/lib/utils'
@@ -41,7 +42,8 @@ export default function DashboardPage() {
   const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [lastRuns,  setLastRuns]  = useState<Record<string, WorkflowRun>>({})
   const [loading,   setLoading]   = useState(true)
-  const [runTarget, setRunTarget] = useState<Workflow | null>(null)
+  const [runTarget,    setRunTarget]    = useState<Workflow | null>(null)
+  const [showNewModal, setShowNewModal] = useState(false)
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/auth')
@@ -85,12 +87,12 @@ export default function DashboardPage() {
           <p className="section-label mb-1.5">Workspace</p>
           <h1 className="text-xl font-bold tracking-tight text-black">Workflows</h1>
         </div>
-        <Link
-          href="/workflows/new"
+        <button
+          onClick={() => setShowNewModal(true)}
           className="px-4 py-1.5 bg-black text-white text-[10px] tracking-[0.12em] uppercase font-semibold hover:bg-black/80 transition-colors"
         >
           + New Workflow
-        </Link>
+        </button>
       </div>
 
       {workflows.length === 0 ? (
@@ -99,12 +101,12 @@ export default function DashboardPage() {
           <p className="text-sm text-black/35 mb-8 max-w-sm mx-auto leading-relaxed">
             Create your first workflow to start automating with AI agent swarms.
           </p>
-          <Link
-            href="/workflows/new"
-            className="inline-block px-6 py-2.5 bg-black text-white text-[10px] tracking-[0.14em] uppercase font-semibold hover:bg-black/80 transition-colors"
+          <button
+            onClick={() => setShowNewModal(true)}
+            className="px-6 py-2.5 bg-black text-white text-[10px] tracking-[0.14em] uppercase font-semibold hover:bg-black/80 transition-colors"
           >
             Create Workflow
-          </Link>
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -190,15 +192,15 @@ export default function DashboardPage() {
           })}
 
           {/* Add new card */}
-          <Link
-            href="/workflows/new"
+          <button
+            onClick={() => setShowNewModal(true)}
             className="border border-dashed border-black/15 rounded-xl p-5 flex flex-col items-center justify-center gap-2 hover:border-black/30 hover:bg-black/[0.02] transition-all min-h-[180px] group"
           >
             <span className="text-2xl font-thin text-black/20 group-hover:text-black/40 transition-colors">+</span>
             <span className="text-[10px] tracking-[0.12em] uppercase text-black/30 group-hover:text-black/50 transition-colors">
               New Workflow
             </span>
-          </Link>
+          </button>
         </div>
       )}
 
@@ -210,6 +212,12 @@ export default function DashboardPage() {
           onRunStarted={runId => router.push(`/workflows/${runTarget.id}?run=${runId}`)}
         />
       )}
+
+      <NewWorkflowModal
+        open={showNewModal}
+        onClose={() => setShowNewModal(false)}
+        onCreated={id => router.push(`/workflows/${id}`)}
+      />
     </div>
   )
 }

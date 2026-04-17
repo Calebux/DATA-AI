@@ -1,20 +1,25 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { cn } from '@/lib/utils'
 
 const NAV_LINKS = [
-  { href: '/dashboard',     label: 'WORKFLOWS' },
-  { href: '/workflows/new', label: 'NEW' },
-  { href: '/agents',        label: 'AGENTS' },
-  { href: '/reports',       label: 'REPORTS' },
+  { href: '/dashboard', label: 'WORKFLOWS' },
+  { href: '/agents',    label: 'AGENTS' },
+  { href: '/reports',   label: 'REPORTS' },
 ]
 
 export default function Navbar() {
   const pathname = usePathname()
+  const router = useRouter()
   const { user, signOut } = useAuth()
+
+  async function handleSignOut() {
+    await signOut()
+    router.push('/')
+  }
 
   return (
     <nav className="fixed top-0 inset-x-0 z-40 h-14 bg-black border-b border-white/10">
@@ -56,7 +61,7 @@ export default function Navbar() {
                 {user.email}
               </span>
               <button
-                onClick={signOut}
+                onClick={handleSignOut}
                 className="text-[10px] tracking-[0.12em] uppercase transition-colors text-white/30 hover:text-white/65"
               >
                 Sign Out
