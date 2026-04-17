@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { getSupabase } from '@/lib/supabase'
@@ -10,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { formatRelative } from '@/lib/utils'
 import type { Workflow, WorkflowRun } from '@/types'
 import {
-  Play, Plus, Activity, ArrowLeft, Bot, Search, User
+  Play, Activity, Bot
 } from 'lucide-react'
 import RunInspectorDrawer from '@/components/run-inspector/RunInspectorDrawer'
 
@@ -81,7 +80,7 @@ export default function RunsDashboardPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#fafafa]">
+      <div className="flex justify-center py-20">
         <Spinner className="text-black/20" />
       </div>
     )
@@ -131,37 +130,7 @@ export default function RunsDashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-apple-gray flex flex-col">
-      {/* Top Navbar */}
-      <div className="h-14 glass-nav flex items-center justify-between px-6 sticky top-0 z-20 flex-shrink-0">
-        <div className="flex items-center">
-          <Link href="/dashboard" className="flex items-center gap-2 text-sm font-medium text-white/70 hover:text-white transition-colors mr-6">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-          <div className="flex items-center gap-2 text-white">
-            <Activity className="h-4 w-4 opacity-70" />
-            <h1 className="text-sm font-bold tracking-tight">Active Runs</h1>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-white/40" />
-            <input 
-              placeholder="Search runs..." 
-              className="pl-8 pr-3 py-1.5 text-xs border border-white/20 rounded-lg bg-white/10 text-white placeholder:text-white/40 focus:bg-white/20 focus:outline-none focus:border-white/40 w-48 transition-colors"
-            />
-          </div>
-          <button onClick={() => router.push('/workflows/new')} className="apple-btn-primary flex items-center gap-1.5 font-medium tracking-tight">
-            <Plus className="h-4 w-4" /> Run
-          </button>
-          <Link href="/profile" className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors">
-            <User className="h-4 w-4" />
-          </Link>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-x-auto">
+    <div className="overflow-x-auto">
         <div className="min-w-fit flex h-full p-6 items-start gap-6">
           
           {/* Running Column */}

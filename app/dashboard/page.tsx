@@ -12,7 +12,7 @@ import type { Workflow, WorkflowRun } from '@/types'
 import { formatRelative } from '@/lib/utils'
 import {
   TrendingUp, DollarSign, AlertCircle, Search, Target,
-  Server, Wand2, Play, Activity, Bell, BarChart3, BookOpen, User, Bot, type LucideProps,
+  Server, Wand2, Play, Bot, type LucideProps,
 } from 'lucide-react'
 import type { FC } from 'react'
 
@@ -78,47 +78,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-apple-gray flex flex-col">
-      {/* Top Navbar */}
-      <div className="h-14 glass-nav flex items-center justify-between px-6 sticky top-0 z-20 flex-shrink-0">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2 text-white">
-            <Bot className="h-4 w-4 opacity-70" />
-            <h1 className="text-sm font-bold tracking-tight">Workflows</h1>
-          </div>
-          <div className="flex items-center gap-1">
-            <Link href="/runs" className="px-3 py-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5">
-              <Activity className="h-3.5 w-3.5" /> Runs
-            </Link>
-            <Link href="/inbox" className="px-3 py-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5">
-              <Bell className="h-3.5 w-3.5" /> Inbox
-            </Link>
-            <Link href="/knowledge" className="px-3 py-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5">
-              <BookOpen className="h-3.5 w-3.5" /> Knowledge Base
-            </Link>
-            <Link href="/analytics" className="px-3 py-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5">
-              <BarChart3 className="h-3.5 w-3.5" /> Analytics
-            </Link>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => router.push('/workflows/new')}
-            className="apple-btn-primary flex items-center gap-1.5 font-medium tracking-tight text-xs"
-          >
-            + New Workflow
-          </button>
-          <button 
-            onClick={() => router.push('/profile')} 
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
-            title="Profile & Settings"
-          >
-            <User className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      <div className="max-w-5xl mx-auto px-5 sm:px-8 pt-10 pb-24 w-full flex-1">
+    <div className="max-w-5xl mx-auto px-5 sm:px-8 pt-10 pb-24 w-full">
 
       {workflows.length === 0 ? (
         <div className="flex flex-col items-center justify-center text-center py-20 px-4">
@@ -264,7 +224,6 @@ export default function DashboardPage() {
           onRunStarted={runId => router.push(`/workflows/${runTarget.id}?run=${runId}`)}
         />
       )}
-    </div>
     </div>
   )
 }
