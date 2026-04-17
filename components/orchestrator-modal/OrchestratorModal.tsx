@@ -47,9 +47,9 @@ export default function OrchestratorModal({ open, onClose, workflow, onRunStarte
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-[rgb(var(--brand))]" />
-            Run Workflow
+          <DialogTitle className="flex items-center gap-2 text-xl font-bold tracking-tight">
+            <Zap className="h-5 w-5 text-apple-blue" />
+            Launch Swarm
           </DialogTitle>
           <DialogDescription>
             This will spawn {steps.length} agent{steps.length !== 1 ? 's' : ''} across {phases.length} phase{phases.length !== 1 ? 's' : ''}.
@@ -59,14 +59,14 @@ export default function OrchestratorModal({ open, onClose, workflow, onRunStarte
         {/* Phase preview */}
         <div className="space-y-2 my-2">
           {phases.map((phase, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <span className="text-xs text-white/30 w-16 flex-shrink-0">Phase {i + 1}</span>
-              <div className="flex flex-wrap gap-1.5 flex-1">
+            <div key={i} className="flex items-center gap-3">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-black/30 w-16 flex-shrink-0">Phase {i + 1}</span>
+              <div className="flex flex-wrap gap-2 flex-1">
                 {phase.map(step => (
-                  <div key={step.id} className="flex items-center gap-1 rounded-lg bg-white/5 border border-white/8 px-2 py-1">
+                  <div key={step.id} className="flex items-center gap-1.5 rounded-lg bg-black/[0.03] border border-black/5 px-2.5 py-1.5 shadow-sm">
                     <AgentNodeIcon role={step.role} />
-                    <span className="text-xs text-white/60 font-mono">{step.id}</span>
-                    {step.consensus && <Badge variant="muted" className="text-[10px] px-1 py-0">×3</Badge>}
+                    <span className="text-xs text-black/60 font-mono font-bold tracking-tight">{step.id}</span>
+                    {step.consensus && <Badge variant="muted" className="text-[9px] px-1 py-0 bg-black/5">×3</Badge>}
                   </div>
                 ))}
               </div>
@@ -78,11 +78,18 @@ export default function OrchestratorModal({ open, onClose, workflow, onRunStarte
           <p className="text-sm text-red-400 rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2">{error}</p>
         )}
 
-        <div className="flex justify-end gap-2 mt-2">
-          <Button variant="ghost" onClick={onClose} disabled={loading}>Cancel</Button>
-          <Button onClick={handleRun} loading={loading}>
-            <Play className="h-4 w-4" /> Start Run
-          </Button>
+        <div className="flex justify-end gap-3 mt-6">
+          <button onClick={onClose} disabled={loading} className="text-sm font-medium text-black/40 hover:text-black transition-colors px-4 py-2">
+            Cancel
+          </button>
+          <button 
+            onClick={handleRun} 
+            disabled={loading}
+            className="apple-btn-primary flex items-center gap-2"
+          >
+            {loading ? <Spinner size="sm" className="text-white" /> : <Play className="h-3.5 w-3.5 fill-current" />}
+            Execute
+          </button>
         </div>
       </DialogContent>
     </Dialog>
@@ -104,5 +111,5 @@ function buildPhasePreview(steps: { id: string; deps: string[]; role: string; co
 }
 
 function AgentNodeIcon({ role }: { role: string }) {
-  return <AgentIcon role={role} className="h-3.5 w-3.5 text-white/50" />
+  return <AgentIcon role={role} className="h-3.5 w-3.5 text-black/40" />
 }
