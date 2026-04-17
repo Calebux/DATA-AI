@@ -90,7 +90,7 @@ export default function AnalyticsPage() {
 
   const computeCost = (tokens: number) => {
     const cost = (tokens / 1_000_000) * COST_PER_1M_TOKENS
-    return cost < 0.01 ? '<$0.01' : \`$\${cost.toFixed(2)}\`
+    return cost < 0.01 ? '<$0.01' : `$\${cost.toFixed(2)}`
   }
 
   const maxTokens = Math.max(...costBreakdown.map(c => c.tokens), 1)
@@ -184,7 +184,7 @@ export default function AnalyticsPage() {
                     </div>
                     {/* Bar graphic */}
                     <div className="h-2 w-full bg-black/5 rounded-full overflow-hidden">
-                      <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: \`\${widthPct}%\` }} />
+                      <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `\${widthPct}%` }} />
                     </div>
                   </div>
                 )
