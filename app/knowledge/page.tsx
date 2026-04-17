@@ -14,7 +14,6 @@ interface KnowledgeSource {
 }
 
 export default function KnowledgeBasePage() {
-  const router = useRouter()
   const [sources, setSources] = useState<KnowledgeSource[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [urlInput, setUrlInput] = useState('')
