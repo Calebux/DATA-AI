@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
     },
-    body: JSON.stringify({ workflow_id, trigger_context: { source: 'manual', user_id: user.id } }),
+    body: JSON.stringify({ workflow_id, run_id: run.id, trigger_context: { source: 'manual', user_id: user.id } }),
   }).catch(err => console.error('Orchestrator invocation failed:', err))
 
   return NextResponse.json({ run_id: run.id })

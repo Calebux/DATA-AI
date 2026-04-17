@@ -12,7 +12,7 @@ import type { Workflow, WorkflowRun } from '@/types'
 import { formatRelative } from '@/lib/utils'
 import {
   TrendingUp, DollarSign, AlertCircle, Search, Target,
-  Server, Wand2, Play, Bot, type LucideProps,
+  Server, Wand2, Play, Bot, Trash2, type LucideProps,
 } from 'lucide-react'
 import type { FC } from 'react'
 
@@ -43,6 +43,8 @@ export default function DashboardPage() {
   const [lastRuns,  setLastRuns]  = useState<Record<string, WorkflowRun>>({})
   const [loading,   setLoading]   = useState(true)
   const [runTarget,    setRunTarget]    = useState<Workflow | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Workflow | null>(null)
+  const [deleting,     setDeleting]     = useState(false)
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/auth')
@@ -72,6 +74,16 @@ export default function DashboardPage() {
     }
     load()
   }, [user])
+
+  async function handleDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    const supabase = getSupabase()
+    await supabase.from('workflows').delete().eq('id', deleteTarget.id)
+    setWorkflows(prev => prev.filter(w => w.id !== deleteTarget.id))
+    setDeleteTarget(null)
+    setDeleting(false)
+  }
 
   if (authLoading || loading) {
     return <div className="flex justify-center pt-28"><Spinner size="sm" className="text-black/20" /></div>
@@ -193,6 +205,13 @@ export default function DashboardPage() {
                   </Link>
                   <div className="flex-1" />
                   <button
+                    onClick={e => { e.stopPropagation(); setDeleteTarget(wf) }}
+                    className="p-1.5 text-black/25 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                    title="Delete workflow"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                  <button
                     onClick={e => { e.stopPropagation(); setRunTarget(wf) }}
                     className="apple-btn-primary py-1.5 px-3 flex items-center gap-1.5 text-xs"
                   >
@@ -223,6 +242,32 @@ export default function DashboardPage() {
           onClose={() => setRunTarget(null)}
           onRunStarted={runId => router.push(`/workflows/${runTarget.id}?run=${runId}`)}
         />
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4">
+            <h3 className="text-base font-bold text-black mb-1">Delete workflow?</h3>
+            <p className="text-sm text-black/50 mb-5">
+              <span className="font-medium text-black">{deleteTarget.name}</span> and all its run history will be permanently deleted.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 text-sm text-black/60 hover:text-black border border-black/10 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors disabled:opacity-50"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

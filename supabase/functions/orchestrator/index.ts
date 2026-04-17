@@ -7,7 +7,7 @@ const supabase = createClient(
 )
 
 Deno.serve(async (req) => {
-  const { workflow_id, trigger_context } = await req.json()
+  const { workflow_id, trigger_context, run_id: existingRunId } = await req.json()
 
   const { data: workflow } = await supabase
     .from('workflows')
@@ -19,13 +19,18 @@ Deno.serve(async (req) => {
 
   const system_prompt = workflow.definition.system_prompt
 
-  const { data: run } = await supabase
-    .from('workflow_runs')
-    .insert({ workflow_id, status: 'running', triggered_at: new Date().toISOString() })
-    .select()
-    .single()
-
-  const runId: string = run.id
+  // Use the run_id created by the API route if provided; otherwise create one
+  let runId: string
+  if (existingRunId) {
+    runId = existingRunId
+  } else {
+    const { data: run } = await supabase
+      .from('workflow_runs')
+      .insert({ workflow_id, status: 'running', triggered_at: new Date().toISOString() })
+      .select()
+      .single()
+    runId = run.id
+  }
   const channel = supabase.channel(`run:${runId}`)
 
   await emit(channel, runId, 'START_WORKFLOW', 'orchestrator', { workflow_id })

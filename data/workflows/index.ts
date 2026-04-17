@@ -201,9 +201,9 @@ LITERAL ANSWERING RULES:
     id: 'data-analyst',
     name: 'Data Analyst',
     category: 'product',
-    description: 'Load and explore datasets, build cohort and funnel reports, answer questions from your Amplitude data.',
+    description: 'Point at any CSV URL or paste raw data. Agents clean, analyse, and return an insight report with trends and caveats.',
     icon: 'BarChart2',
-    prompt: 'Analyse the provided dataset or Amplitude event data and answer the question.',
+    prompt: 'Analyse the provided dataset and surface the most important insights.',
     system_prompt: `You are a Principal Data Scientist. You analyze datasets with absolute statistical rigor.
 
 METHODOLOGY:
@@ -211,18 +211,15 @@ METHODOLOGY:
 2. CLEANING: Explicitly declare how missing data or outliers were handled before analysis.
 3. ANALYSIS: Apply proper statistical logic. Distinguish correlation from causation.
 4. SYNTHESIS: Return actionable insights. Provide confidence intervals where applicable.`,
-    mcp_servers: [
-      { name: 'amplitude', label: 'Amplitude', url: 'https://mcp.amplitude.com/mcp', description: 'Event funnels, cohorts, retention' },
-    ],
     triggers: ['manual', 'webhook'],
-    outputs: ['report', 'webhook'],
+    outputs: ['report'],
     definition: {
       name: 'Data Analyst',
       category: 'product',
       trigger: { type: 'manual' },
       steps: [
-        { step_id: 'load_data', agent_role: 'data_ingestor', depends_on: [], instructions: 'Fetch raw data from the configured data source. Return raw payload.', data_sources: [{ type: 'api', connector: 'amplitude' }], input_sources: [], output_keys: ['raw_data'], timeout_ms: 45000 },
-        { step_id: 'analyze', agent_role: 'analyst', depends_on: ['load_data'], instructions: 'Perform descriptive statistics. Group data by relevant dimensions. OUTPUT MUST BE JSON schema: { "insights": [{ "metric": "string", "value": "number", "trend": "string", "significance": "number" }], "summary_markdown": "string", "caveats": ["string"] }', input_sources: ['raw_data'], output_keys: ['analysis_result'], timeout_ms: 120000 },
+        { step_id: 'load_data', agent_role: 'data_ingestor', depends_on: [], instructions: 'Fetch the CSV or JSON data from the URL provided in trigger_context.data_url. If no URL, use trigger_context.raw_data. Return the raw text payload.', data_sources: [{ type: 'web_scrape', url: '' }], input_sources: [], output_keys: ['raw_data'], timeout_ms: 45000 },
+        { step_id: 'analyze', agent_role: 'analyst', depends_on: ['load_data'], instructions: 'Parse the raw_data as CSV or JSON. Perform descriptive statistics. Group by relevant dimensions. OUTPUT MUST BE JSON: { "insights": [{ "metric": "string", "value": "number|string", "trend": "string", "significance": "number" }], "summary_markdown": "string", "caveats": ["string"] }', input_sources: ['raw_data'], output_keys: ['analysis_result'], timeout_ms: 120000 },
         { step_id: 'deliver', agent_role: 'delivery', depends_on: ['analyze'], instructions: 'Publish the summary_markdown as a formatted Markdown report document.', input_sources: ['analysis_result'], output_keys: ['delivery_receipt'], timeout_ms: 15000 },
       ],
       output: { channels: [{ type: 'report', format: 'markdown' }] },
