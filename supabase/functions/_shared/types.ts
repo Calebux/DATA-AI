@@ -74,6 +74,14 @@ export type DeliveryChannel =
   | { type: 'report'; format: 'pdf' | 'xlsx' | 'markdown' }
   | { type: 'telegram'; chat_id: string }
 
+export interface McpServer {
+  name: string
+  label: string
+  url: string
+  description: string
+  enabled: boolean
+}
+
 export interface WorkflowDefinition {
   id: string
   name: string
@@ -85,6 +93,9 @@ export interface WorkflowDefinition {
   }
   steps: WorkflowStep[]
   output: { channels: DeliveryChannel[] }
+  system_prompt?: string
+  mcp_servers?: McpServer[]
+  webhook_secret?: string
 }
 
 export interface EvalResult {

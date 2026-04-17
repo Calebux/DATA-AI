@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,10 +19,16 @@ export interface WebhookConfig {
 }
 
 export default function WebhookExecutor({ workflowId, onSave }: WebhookExecutorProps) {
-  const webhookUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/orchestrator`
+  const [origin, setOrigin] = useState('')
+  const webhookUrl = `${origin}/api/webhook/${workflowId}`
   const [secret] = useState(() => generateSecret())
   const [copied, setCopied] = useState<'url' | 'secret' | null>(null)
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
+
+  // Capture window.location.origin client-side to avoid SSR mismatch
+  useEffect(() => {
+    setOrigin(window.location.origin)
+  }, [])
 
   async function copy(type: 'url' | 'secret', text: string) {
     await navigator.clipboard.writeText(text)
@@ -33,12 +39,15 @@ export default function WebhookExecutor({ workflowId, onSave }: WebhookExecutorP
   async function testWebhook() {
     setTestStatus('loading')
     try {
-      const res = await fetch('/api/webhooks/test', {
+      const res = await fetch(webhookUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workflow_id: workflowId, secret }),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Webhook-Secret': secret,
+        },
+        body: JSON.stringify({ _test: true }),
       })
-      setTestStatus(res.ok ? 'ok' : 'error')
+      setTestStatus(res.ok || res.status === 202 ? 'ok' : 'error')
     } catch {
       setTestStatus('error')
     }

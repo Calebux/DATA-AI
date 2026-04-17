@@ -22,8 +22,9 @@ import DemoComparison from '@/components/demo-comparison/DemoComparison'
 import AgentCommsGraph from '@/components/agent-comms-graph/AgentCommsGraph'
 import SwarmMetrics from '@/components/swarm-metrics/SwarmMetrics'
 import Link from 'next/link'
-import { ArrowLeft, Play, Clock } from 'lucide-react'
+import { ArrowLeft, Play, Clock, Settings2 } from 'lucide-react'
 import { formatRelative } from '@/lib/utils'
+import WorkflowEditDrawer from '@/components/workflow-builder/WorkflowEditDrawer'
 
 const RUN_BADGE = { running: 'default', complete: 'green', failed: 'red' } as const
 
@@ -36,6 +37,7 @@ export default function WorkflowDetailPage() {
   const [activeRunId, setActiveRunId] = useState<string | null>(searchParams.get('run'))
   const [loading, setLoading] = useState(true)
   const [showRunModal, setShowRunModal] = useState(false)
+  const [showEditDrawer, setShowEditDrawer] = useState(false)
 
   useEffect(() => {
     if (!user || !id) return
@@ -92,6 +94,12 @@ export default function WorkflowDetailPage() {
               {workflow.definition.steps.length} agents · {workflow.category.replace('_', ' ')}
             </p>
           </div>
+          <button
+            onClick={() => setShowEditDrawer(true)}
+            className="flex items-center gap-1.5 px-3 py-2 border border-black/12 text-[10px] tracking-[0.12em] uppercase text-black/45 hover:text-black hover:border-black/30 transition-colors"
+          >
+            <Settings2 className="h-3.5 w-3.5" /> Edit
+          </button>
           <Button onClick={() => setShowRunModal(true)}>
             <Play className="h-4 w-4" /> Run Now
           </Button>
@@ -309,6 +317,13 @@ export default function WorkflowDetailPage() {
             onRunStarted={runId => { setActiveRunId(runId); setShowRunModal(false) }}
           />
         )}
+
+        <WorkflowEditDrawer
+          open={showEditDrawer}
+          workflow={workflow}
+          onClose={() => setShowEditDrawer(false)}
+          onSaved={updated => setWorkflow(updated)}
+        />
       </div>
     </div>
   )
