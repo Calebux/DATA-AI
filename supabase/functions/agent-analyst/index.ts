@@ -6,17 +6,22 @@ const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPAB
 const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY')! })
 
 Deno.serve(async (req) => {
-  const { step, input, run_id }: { step: WorkflowStep; input: Record<string, unknown>; run_id: string } = await req.json()
+  const { step, input, run_id, system_prompt: customSystemPrompt }: {
+    step: WorkflowStep
+    input: Record<string, unknown>
+    run_id: string
+    system_prompt?: string
+  } = await req.json()
+
+  const systemPrompt = customSystemPrompt ??
+    'You are an AI analyst agent. Respond with valid JSON matching the output format specified. If you cannot complete the task, respond with { "error": "reason" }.'
 
   const prompt = buildPrompt(step.instructions, input)
 
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o',
     messages: [
-      {
-        role: 'system',
-        content: 'You are an AI analyst agent. Respond with valid JSON matching the output format specified. If you cannot complete the task, respond with { "error": "reason" }.',
-      },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: prompt },
     ],
     response_format: { type: 'json_object' },

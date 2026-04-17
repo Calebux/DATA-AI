@@ -1,3 +1,11 @@
+export interface McpServer {
+  name: string
+  label: string
+  url: string
+  description: string
+  enabled: boolean
+}
+
 export type AgentRole =
   | 'data_ingestor'
   | 'analyst'
@@ -97,6 +105,9 @@ export interface WorkflowDefinition {
   }
   steps: WorkflowStep[]
   output: { channels: DeliveryChannelType[] }
+  system_prompt?: string
+  mcp_servers?: McpServer[]
+  webhook_secret?: string
 }
 
 export type WorkflowStatus = 'active' | 'paused' | 'draft'
@@ -179,6 +190,8 @@ export interface WorkflowTemplate {
   description: string
   icon: string
   prompt: string
+  system_prompt: string
+  mcp_servers?: Omit<McpServer, 'enabled'>[]
   triggers: TriggerType[]
   outputs: string[]
   definition: Omit<WorkflowDefinition, 'id'>

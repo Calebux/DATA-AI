@@ -1,3 +1,8 @@
+'use client'
+
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/contexts/AuthContext'
 import Link from 'next/link'
 
 const FEATURED = [
@@ -37,6 +42,15 @@ const CAPABILITIES = [
 ]
 
 export default function HomePage() {
+  const { user, loading } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!loading && user) router.replace('/dashboard')
+  }, [user, loading])
+
+  if (loading || user) return null
+
   return (
     <div className="max-w-5xl mx-auto px-5 sm:px-8 pt-10 pb-24">
 
@@ -47,7 +61,7 @@ export default function HomePage() {
         {FEATURED.map((t, i) => (
           <Link
             key={t.num}
-            href="/workflows/new"
+            href="/auth"
             className={`block p-6 hover:bg-black/3 transition-colors group ${i < 2 ? 'sm:border-r sm:border-black/10' : ''} ${i > 0 ? 'border-t sm:border-t-0 border-black/10' : ''}`}
           >
             <p className="section-label mb-8">{t.num} · {t.category}</p>
@@ -127,10 +141,10 @@ export default function HomePage() {
             Open Dashboard
           </Link>
           <Link
-            href="/workflows/new"
+            href="/auth"
             className="px-5 py-2 border border-black/20 text-black text-[10px] tracking-[0.14em] uppercase hover:border-black/50 transition-colors"
           >
-            Browse Templates
+            Get Started
           </Link>
         </div>
       </div>

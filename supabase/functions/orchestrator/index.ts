@@ -17,6 +17,8 @@ Deno.serve(async (req) => {
 
   if (!workflow) return new Response('Workflow not found', { status: 404 })
 
+  const system_prompt = workflow.definition.system_prompt
+
   const { data: run } = await supabase
     .from('workflow_runs')
     .insert({ workflow_id, status: 'running', triggered_at: new Date().toISOString() })
@@ -34,7 +36,7 @@ Deno.serve(async (req) => {
   try {
     for (const phase of taskGraph.phases) {
       const results = await Promise.allSettled(
-        phase.map(step => spawnAgent(step, runId, workingMemory, channel))
+        phase.map(step => spawnAgent(step, runId, workingMemory, channel, system_prompt))
       )
       for (const result of results) {
         if (result.status === 'fulfilled') {
@@ -78,18 +80,19 @@ async function spawnAgent(
   step: WorkflowStep,
   runId: string,
   workingMemory: Record<string, unknown>,
-  channel: ReturnType<typeof supabase.channel>
+  channel: ReturnType<typeof supabase.channel>,
+  system_prompt?: string
 ): Promise<Record<string, unknown>> {
   await emit(channel, runId, 'TASK_ASSIGNED', 'orchestrator', { step_id: step.step_id, agent_role: step.agent_role })
 
   const input = Object.fromEntries(step.input_sources.map(k => [k, workingMemory[k]]))
 
   if (step.consensus) {
-    return runConsensus(step, input, runId, channel)
+    return runConsensus(step, input, runId, channel, system_prompt)
   }
 
   const { data, error } = await supabase.functions.invoke(`agent-${step.agent_role}`, {
-    body: { step, input, run_id: runId },
+    body: { step, input, run_id: runId, system_prompt },
   })
   if (error) throw new Error(`Agent ${step.agent_role} failed: ${error.message}`)
 
@@ -101,7 +104,8 @@ async function runConsensus(
   step: WorkflowStep,
   input: Record<string, unknown>,
   runId: string,
-  channel: ReturnType<typeof supabase.channel>
+  channel: ReturnType<typeof supabase.channel>,
+  system_prompt?: string
 ): Promise<Record<string, unknown>> {
   const { agent_count, agreement_threshold, reconciliation } = step.consensus!
   await emit(channel, runId, 'CONSENSUS_START', 'orchestrator', { step_id: step.step_id, agent_count })
@@ -110,7 +114,7 @@ async function runConsensus(
   const results = await Promise.allSettled(
     instanceIds.map(instance_id =>
       supabase.functions.invoke(`agent-${step.agent_role}`, {
-        body: { step, input, run_id: runId, instance_id },
+        body: { step, input, run_id: runId, instance_id, system_prompt },
       })
     )
   )
