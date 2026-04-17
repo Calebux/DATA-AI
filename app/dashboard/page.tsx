@@ -12,7 +12,7 @@ import type { Workflow, WorkflowRun } from '@/types'
 import { formatRelative } from '@/lib/utils'
 import {
   TrendingUp, DollarSign, AlertCircle, Search, Target,
-  Server, Wand2, Play, type LucideProps,
+  Server, Wand2, Play, Activity, Bell, BarChart3, BookOpen, User, type LucideProps,
 } from 'lucide-react'
 import type { FC } from 'react'
 
@@ -78,21 +78,47 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-5 sm:px-8 pt-10 pb-24">
-
-      {/* Header */}
-      <div className="flex items-end justify-between mb-8 pb-4 rule">
-        <div>
-          <p className="section-label mb-1.5">Workspace</p>
-          <h1 className="text-xl font-bold tracking-tight text-black">Workflows</h1>
+    <div className="min-h-screen bg-apple-gray flex flex-col">
+      {/* Top Navbar */}
+      <div className="h-14 glass-nav flex items-center justify-between px-6 sticky top-0 z-20 flex-shrink-0">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2 text-white">
+            <Bot className="h-4 w-4 opacity-70" />
+            <h1 className="text-sm font-bold tracking-tight">Workflows</h1>
+          </div>
+          <div className="flex items-center gap-1">
+            <Link href="/runs" className="px-3 py-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5">
+              <Activity className="h-3.5 w-3.5" /> Runs
+            </Link>
+            <Link href="/inbox" className="px-3 py-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5">
+              <Bell className="h-3.5 w-3.5" /> Inbox
+            </Link>
+            <Link href="/knowledge" className="px-3 py-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5">
+              <BookOpen className="h-3.5 w-3.5" /> Knowledge Base
+            </Link>
+            <Link href="/analytics" className="px-3 py-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5">
+              <BarChart3 className="h-3.5 w-3.5" /> Analytics
+            </Link>
+          </div>
         </div>
-        <button
-          onClick={() => router.push('/workflows/new')}
-          className="px-4 py-1.5 bg-black text-white text-[10px] tracking-[0.12em] uppercase font-semibold hover:bg-black/80 transition-colors"
-        >
-          + New Workflow
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => router.push('/workflows/new')}
+            className="apple-btn-primary flex items-center gap-1.5 font-medium tracking-tight text-xs"
+          >
+            + New Workflow
+          </button>
+          <button 
+            onClick={() => router.push('/profile')} 
+            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+            title="Profile & Settings"
+          >
+            <User className="h-4 w-4" />
+          </button>
+        </div>
       </div>
+
+      <div className="max-w-5xl mx-auto px-5 sm:px-8 pt-10 pb-24 w-full flex-1">
 
       {workflows.length === 0 ? (
         <div className="flex flex-col items-center justify-center text-center py-20 px-4">
@@ -108,9 +134,9 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-4xl text-left w-full mb-10">
             {WORKFLOW_TEMPLATES.slice(0, 3).map(t => (
               <div key={t.id} onClick={() => router.push('/workflows/new')}
-                className="bg-white border border-black/10 hover:border-black/30 hover:shadow-md rounded-xl p-5 cursor-pointer transition-all flex flex-col group h-full">
+                className="apple-card p-5 cursor-pointer flex flex-col group h-full hover:-translate-y-1">
                 <div className="flex items-start justify-between mb-4">
-                  <div className="w-10 h-10 border border-black/10 rounded-lg flex items-center justify-center bg-black/[0.02] group-hover:bg-black text-black group-hover:text-white transition-colors">
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-black/[0.02] text-black group-hover:bg-[#0071e3] group-hover:text-white transition-colors">
                     <WorkflowIcon icon={t.icon} className="h-5 w-5" />
                   </div>
                 </div>
@@ -129,7 +155,7 @@ export default function DashboardPage() {
 
           <button
             onClick={() => router.push('/workflows/new')}
-            className="px-6 py-2.5 bg-black text-white text-[10px] tracking-[0.14em] uppercase font-semibold hover:bg-black/80 transition-colors shadow-md"
+            className="apple-btn-primary mt-4 tracking-tight"
           >
             Create Custom Workflow
           </button>
@@ -144,12 +170,12 @@ export default function DashboardPage() {
             return (
               <div
                 key={wf.id}
-                className="bg-white border border-black/10 rounded-xl p-5 flex flex-col gap-4 hover:border-black/25 hover:shadow-sm transition-all cursor-pointer group"
+                className="apple-card p-5 flex flex-col gap-4 hover:-translate-y-1 cursor-pointer group"
                 onClick={() => router.push(isLive ? `/workflows/${wf.id}?run=${run.id}` : `/workflows/${wf.id}`)}
               >
                 {/* Top row: icon + name + status dot */}
                 <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 border border-black/10 rounded-lg flex items-center justify-center flex-shrink-0 bg-black/[0.02]">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-black/[0.02]">
                     <WorkflowIcon
                       icon={wf.definition?.name ? undefined : undefined}
                       className="h-4 w-4 text-black/40"
@@ -197,18 +223,18 @@ export default function DashboardPage() {
                 )}
 
                 {/* Actions */}
-                <div className="flex items-center gap-2 pt-1 border-t border-black/6 -mx-5 px-5 mt-auto">
+                <div className="flex items-center gap-2 pt-3 border-t border-black/6 -mx-5 px-5 mt-auto">
                   <Link
                     href={`/workflows/${wf.id}`}
                     onClick={e => e.stopPropagation()}
-                    className="text-[10px] tracking-[0.1em] uppercase text-black/35 hover:text-black transition-colors"
+                    className="apple-link text-sm"
                   >
                     View
                   </Link>
                   <div className="flex-1" />
                   <button
                     onClick={e => { e.stopPropagation(); setRunTarget(wf) }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-black text-white text-[10px] tracking-[0.1em] uppercase font-semibold rounded-md hover:bg-black/80 transition-colors"
+                    className="apple-btn-primary py-1.5 px-3 flex items-center gap-1.5 text-xs"
                   >
                     <Play className="h-3 w-3" /> Run
                   </button>
@@ -220,10 +246,10 @@ export default function DashboardPage() {
           {/* Add new card */}
           <button
             onClick={() => router.push('/workflows/new')}
-            className="border border-dashed border-black/15 rounded-xl p-5 flex flex-col items-center justify-center gap-2 hover:border-black/30 hover:bg-black/[0.02] transition-all min-h-[180px] group"
+            className="apple-card flex flex-col items-center justify-center gap-2 min-h-[180px] group bg-white/50 hover:bg-white"
           >
-            <span className="text-2xl font-thin text-black/20 group-hover:text-black/40 transition-colors">+</span>
-            <span className="text-[10px] tracking-[0.12em] uppercase text-black/30 group-hover:text-black/50 transition-colors">
+            <span className="text-2xl font-thin text-black/20 group-hover:text-[#0071e3] transition-colors">+</span>
+            <span className="text-sm font-medium tracking-tight text-black/40 group-hover:text-[#0071e3] transition-colors">
               New Workflow
             </span>
           </button>
@@ -238,6 +264,7 @@ export default function DashboardPage() {
           onRunStarted={runId => router.push(`/workflows/${runTarget.id}?run=${runId}`)}
         />
       )}
+    </div>
     </div>
   )
 }

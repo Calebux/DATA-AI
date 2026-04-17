@@ -9,7 +9,13 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     description: 'Pull Stripe + HubSpot data, score churn risk, flag competitive threats, deliver CEO briefing by 8AM Monday.',
     icon: 'TrendingUp',
     prompt: 'Analyse MRR changes, identify at-risk accounts, and summarise competitive signals for the week.',
-    system_prompt: 'You are a senior SaaS analyst. You pull financial and CRM data, identify business risks, and write concise CEO briefings. Be direct, data-driven, and flag only what matters. Every sentence must contain a number, a risk, or an action.',
+    system_prompt: `You are a Senior SaaS Financial Analyst. Your role is to formulate executive briefings from raw financial APIs.
+
+STRICT INSTRUCTIONS:
+1. DATA VALIDATION: Always check the shape and validity of the incoming data. If data is null or empty, IMMEDIATELY halt the analysis and return a JSON error payload explaining the missing data source.
+2. PRECISION: All financial figures (MRR, ARR) must be calculated exactly. Do not estimate.
+3. CONTEXT: Every number provided in the summary must have a relative context (e.g. "MRR is $10k, up 5% WoW").
+4. FORMAT: You must strictly adhere to the requested schema. Never return conversational filler text outside of the JSON payload.`,
     triggers: ['cron'],
     outputs: ['email', 'webhook'],
     definition: {
@@ -17,13 +23,13 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
       category: 'finance_executive',
       trigger: { type: 'cron', cron_expression: '0 8 * * MON', timezone: 'America/New_York' },
       steps: [
-        { step_id: 'ingest_stripe', agent_role: 'data_ingestor', depends_on: [], instructions: 'Pull MRR, new/churned subscriptions, and payment failures from Stripe for the last 7 days.', data_sources: [{ type: 'api', connector: 'stripe' }], input_sources: [], output_keys: ['stripe_data'], timeout_ms: 30000 },
-        { step_id: 'ingest_hubspot', agent_role: 'data_ingestor', depends_on: [], instructions: 'Pull deals closed, inactive contacts (>21 days), support ticket counts, and NPS scores from HubSpot.', data_sources: [{ type: 'api', connector: 'hubspot' }], input_sources: [], output_keys: ['hubspot_data'], timeout_ms: 30000 },
-        { step_id: 'analyze_revenue', agent_role: 'analyst', depends_on: ['ingest_stripe'], instructions: 'Calculate WoW MRR change, identify primary driver, flag anomalies. Output: { summary, mrr_change_pct, primary_driver, anomalies, arr_implied, risk_level }', input_sources: ['stripe_data'], output_keys: ['revenue_analysis'], timeout_ms: 60000 },
-        { step_id: 'analyze_churn_risk', agent_role: 'analyst', depends_on: ['ingest_stripe', 'ingest_hubspot'], instructions: 'Score churn probability for each flagged account. Rank top 5 by revenue impact × probability. Output: { at_risk_accounts, total_revenue_at_risk, confidence }', input_sources: ['stripe_data', 'hubspot_data'], output_keys: ['churn_analysis'], timeout_ms: 90000, consensus: { agent_count: 3, agreement_threshold: 0.67, reconciliation: 'highest_confidence' } },
-        { step_id: 'synthesize', agent_role: 'analyst', depends_on: ['analyze_revenue', 'analyze_churn_risk'], instructions: 'Write a CEO briefing with sections: HEADLINE, REVENUE, CUSTOMERS AT RISK, RECOMMENDED ACTIONS. Direct tone, no filler.', input_sources: ['revenue_analysis', 'churn_analysis'], output_keys: ['synthesized_report'], timeout_ms: 60000 },
-        { step_id: 'eval_report', agent_role: 'eval', depends_on: ['synthesize'], instructions: 'Score completeness, specificity, actionability, tone (0–1 each). Fail if any < 0.75.', input_sources: ['synthesized_report'], output_keys: ['eval_result'], retry_target: 'synthesize', max_retries: 2, timeout_ms: 30000 },
-        { step_id: 'deliver', agent_role: 'delivery', depends_on: ['eval_report'], instructions: 'Format as HTML email and send to configured recipients.', input_sources: ['synthesized_report', 'eval_result'], output_keys: ['delivery_receipt'], timeout_ms: 15000 },
+        { step_id: 'ingest_stripe', agent_role: 'data_ingestor', depends_on: [], instructions: 'Pull MRR, new/churned subscriptions, and payment failures from Stripe for the last 7 days. Return RAW JSON payload. If API fails, return { "error": "Stripe API unreachable", "source": "stripe" }.', data_sources: [{ type: 'api', connector: 'stripe' }], input_sources: [], output_keys: ['stripe_data'], timeout_ms: 30000 },
+        { step_id: 'ingest_hubspot', agent_role: 'data_ingestor', depends_on: [], instructions: 'Pull deals closed, inactive contacts (>21 days), support ticket counts, and NPS scores from HubSpot. Return RAW JSON.', data_sources: [{ type: 'api', connector: 'hubspot' }], input_sources: [], output_keys: ['hubspot_data'], timeout_ms: 30000 },
+        { step_id: 'analyze_revenue', agent_role: 'analyst', depends_on: ['ingest_stripe'], instructions: 'Calculate WoW MRR change, identify primary driver, flag anomalies. YOU MUST RETURN EXACTLY THIS JSON SCHEMA WITH NO EXTRA TEXT: { "summary": "string", "mrr_change_pct": "number", "primary_driver": "string", "anomalies": ["string"], "arr_implied": "number", "risk_level": "LOW|MED|HIGH" }', input_sources: ['stripe_data'], output_keys: ['revenue_analysis'], timeout_ms: 60000 },
+        { step_id: 'analyze_churn_risk', agent_role: 'analyst', depends_on: ['ingest_stripe', 'ingest_hubspot'], instructions: 'Score churn probability [0.0-1.0] for flagged accounts. Rank top 5 by (MRR * probability). MUST RETURN JSON SCHEMA: { "at_risk_accounts": [{ "id": "string", "mrr_impact": "number", "probability": "number", "reason": "string" }], "total_revenue_at_risk": "number", "confidence": "number" }', input_sources: ['stripe_data', 'hubspot_data'], output_keys: ['churn_analysis'], timeout_ms: 90000, consensus: { agent_count: 3, agreement_threshold: 0.67, reconciliation: 'highest_confidence' } },
+        { step_id: 'synthesize', agent_role: 'analyst', depends_on: ['analyze_revenue', 'analyze_churn_risk'], instructions: 'Write the CEO briefing combining revenue analysis and churn risk. Structure strictly with markdown headers: # HEADLINE \n ## REVENUE \n ## CUSTOMERS AT RISK \n ## RECOMMENDED ACTIONS. Be direct, no opening greetings.', input_sources: ['revenue_analysis', 'churn_analysis'], output_keys: ['synthesized_report'], timeout_ms: 60000 },
+        { step_id: 'eval_report', agent_role: 'eval', depends_on: ['synthesize'], instructions: 'Score completeness, specificity, actionability, tone on a 0.0 to 1.0 scale. If ANY score < 0.75, FAIL the evaluation and return specific feedback on what is missing.', input_sources: ['synthesized_report'], output_keys: ['eval_result'], retry_target: 'synthesize', max_retries: 2, timeout_ms: 30000 },
+        { step_id: 'deliver', agent_role: 'delivery', depends_on: ['eval_report'], instructions: 'Format the synthesized_report as an HTML email and dispatch.', input_sources: ['synthesized_report', 'eval_result'], output_keys: ['delivery_receipt'], timeout_ms: 15000 },
       ],
       output: { channels: [{ type: 'email', to: [] }, { type: 'report', format: 'pdf' }] },
     },
@@ -60,7 +66,12 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     description: 'Daily scan of CRM signals to surface accounts at risk before they cancel.',
     icon: 'AlertCircle',
     prompt: 'Identify accounts showing disengagement signals and recommend specific CS interventions.',
-    system_prompt: 'You are a Customer Success analyst specialising in churn prevention. You scan CRM data for behavioural signals — declining usage, overdue support tickets, low NPS, missed check-ins — and rank accounts by churn probability × revenue impact. For each at-risk account, recommend one specific, actionable intervention.',
+    system_prompt: `You are a Customer Success Intelligence Analyst. You scan CRM metrics for covert behavioral signals indicating high churn risk.
+
+INSTRUCTIONS:
+1. Identify primary risk factors: declining product usage, unresolved P1 support tickets, ignored check-in emails, or low NPS scores.
+2. Weight factors by the velocity of decay (e.g. usage dropped 50% in 1 week is worse than 20% in 1 month).
+3. Always suggest exactly ONE concrete action the Account Manager can take today to save the account.`,
     triggers: ['cron'],
     outputs: ['email', 'webhook'],
     definition: {
@@ -68,9 +79,9 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
       category: 'customer_success',
       trigger: { type: 'cron', cron_expression: '0 7 * * MON-FRI', timezone: 'America/New_York' },
       steps: [
-        { step_id: 'ingest', agent_role: 'data_ingestor', depends_on: [], instructions: 'Pull all CRM contacts with last_activity > 14 days, support tickets > 2, or NPS < 7.', data_sources: [{ type: 'api', connector: 'hubspot' }], input_sources: [], output_keys: ['crm_data'], timeout_ms: 30000 },
-        { step_id: 'analyze', agent_role: 'analyst', depends_on: ['ingest'], instructions: 'Score each at-risk account (0–1 churn probability). Rank by MRR × risk. Recommend one action per account.', input_sources: ['crm_data'], output_keys: ['risk_report'], timeout_ms: 60000, consensus: { agent_count: 3, agreement_threshold: 0.67, reconciliation: 'highest_confidence' } },
-        { step_id: 'deliver', agent_role: 'delivery', depends_on: ['analyze'], instructions: 'Send daily CS digest to configured Slack webhook and email.', input_sources: ['risk_report'], output_keys: ['delivery_receipt'], timeout_ms: 15000 },
+        { step_id: 'ingest', agent_role: 'data_ingestor', depends_on: [], instructions: 'Pull all CRM contacts matching risk criteria (last_activity > 14 days OR open tickets > 2 OR NPS < 7). Fetch their MRR values.', data_sources: [{ type: 'api', connector: 'hubspot' }], input_sources: [], output_keys: ['crm_data'], timeout_ms: 30000 },
+        { step_id: 'analyze', agent_role: 'analyst', depends_on: ['ingest'], instructions: 'Score each account on a 0.0-1.0 risk scale. Multiply risk by MRR to get At-Risk Value. Output MUST be an array of objects: [{ account_id, name, risk_score, at_risk_value, recommended_action }]. Sort descending by at_risk_value.', input_sources: ['crm_data'], output_keys: ['risk_report'], timeout_ms: 60000, consensus: { agent_count: 3, agreement_threshold: 0.67, reconciliation: 'highest_confidence' } },
+        { step_id: 'deliver', agent_role: 'delivery', depends_on: ['analyze'], instructions: 'Parse the risk_report array. If empty, halt. Otherwise, format into a styled HTML table and post to CS Slack Webhook.', input_sources: ['risk_report'], output_keys: ['delivery_receipt'], timeout_ms: 15000 },
       ],
       output: { channels: [{ type: 'email', to: [] }, { type: 'webhook', url: '' }] },
     },
@@ -132,7 +143,13 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     description: 'Receives webhook alerts from Datadog/PagerDuty, triages severity, auto-resolves P3/P4, and escalates P1/P2 to on-call.',
     icon: 'Server',
     prompt: 'Parse the incoming alert, assess severity, and decide whether to auto-resolve or escalate to a human.',
-    system_prompt: 'You are an on-call SRE assistant. You receive infrastructure alerts, parse the payload, assess severity (P1–P4), form a root-cause hypothesis, and recommend an action. P1/P2: always escalate to a human before acting. P3/P4: auto-resolve with a summary. Be concise — on-call engineers are time-pressured.',
+    system_prompt: `You are an L2 Site Reliability Engineer answering automated infrastructure alerts. 
+
+ROUTING LOGIC:
+1. P1/P2 SEVERITY: Any alert involving database degradation, node failure on primary clusters, or API 5xx spikes > 5%. YOU MUST route to ESCALATOR.
+2. P3/P4 SEVERITY: High memory usage, background worker delay, single-pod restarts. You MUST route to AUTO_RESOLVE.
+
+Never assume root causes without metric evidence. If unsure, default to P2 escalation.`,
     triggers: ['webhook'],
     outputs: ['webhook', 'email'],
     definition: {
@@ -140,10 +157,10 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
       category: 'operations',
       trigger: { type: 'webhook' },
       steps: [
-        { step_id: 'parse_alert', agent_role: 'data_ingestor', depends_on: [], instructions: 'Parse the incoming webhook payload. Extract: service name, error message, affected region, metric values, alert source.', input_sources: [], output_keys: ['alert_data'], timeout_ms: 15000 },
-        { step_id: 'triage', agent_role: 'analyst', depends_on: ['parse_alert'], instructions: 'Assess alert severity P1–P4. Check runbook patterns. Output: { severity_level, summary, root_cause_hypothesis, recommended_action, auto_resolvable, confidence }', input_sources: ['alert_data'], output_keys: ['triage_result'], timeout_ms: 45000, consensus: { agent_count: 3, agreement_threshold: 0.67, reconciliation: 'highest_confidence' } },
-        { step_id: 'escalate', agent_role: 'escalator', depends_on: ['triage'], instructions: 'Escalate P1/P2 to on-call for human approval. Present summary and recommended action.', input_sources: ['triage_result'], output_keys: ['escalation_result'], timeout_ms: 120000 },
-        { step_id: 'resolve', agent_role: 'delivery', depends_on: ['escalate'], instructions: 'Post incident resolution to #incidents Slack channel. If rejected: page senior engineer.', input_sources: ['triage_result', 'escalation_result'], output_keys: ['resolution_receipt'], timeout_ms: 15000 },
+        { step_id: 'parse_alert', agent_role: 'data_ingestor', depends_on: [], instructions: 'Extract key identifiers from the payload: service_name, error_code, environment, memory_usage, cpu_usage. Return Cleaned JSON.', input_sources: [], output_keys: ['alert_data'], timeout_ms: 15000 },
+        { step_id: 'triage', agent_role: 'analyst', depends_on: ['parse_alert'], instructions: 'Assess severity (P1-P4). Construct root cause hypothesis. MUST OUTPUT JSON: { "severity_level": "P1|P2|P3|P4", "summary": "string", "root_cause": "string", "requires_escalation": boolean, "recommended_fix": "string", "confidence": "number" }. Set requires_escalation = true ONLY for P1/P2.', input_sources: ['alert_data'], output_keys: ['triage_result'], timeout_ms: 45000, consensus: { agent_count: 3, agreement_threshold: 0.67, reconciliation: 'highest_confidence' } },
+        { step_id: 'escalate', agent_role: 'escalator', depends_on: ['triage'], instructions: 'If triage_result.requires_escalation is true: Issue ESCALATION_REQUESTED event to the human Inbox and pause. Provide the human with the summary and recommended_fix.', input_sources: ['triage_result'], output_keys: ['escalation_result'], timeout_ms: 120000 },
+        { step_id: 'resolve', agent_role: 'delivery', depends_on: ['escalate'], instructions: 'Post incident resolution to #incidents Slack. Note if it was auto-resolved or human-approved. Issue webhook callback to Datadog to acknowledge.', input_sources: ['triage_result', 'escalation_result'], output_keys: ['resolution_receipt'], timeout_ms: 15000 },
       ],
       output: { channels: [{ type: 'webhook', url: '' }, { type: 'email', to: [] }] },
     },
@@ -157,7 +174,12 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     description: 'Answers support questions from your docs (llms.txt). Escalates unanswered questions via email.',
     icon: 'MessageSquare',
     prompt: 'Answer the user question from the documentation. If the answer is not in the docs, escalate via email.',
-    system_prompt: 'You are Support Agent, a docs-powered support agent. When a user asks a question:\n1. Search your knowledge base (llms.txt or provided docs URL) for a precise answer.\n2. If you find it: answer clearly and cite the relevant section.\n3. If the docs do not cover the question: send an escalation email via Resend to the support team with the original question and context.\nNever make up answers. Always prefer a clear "I don\'t know, escalating" over a wrong answer.',
+    system_prompt: `You are a Tier 1 Customer Support Agent. Your sole source of truth is the provided Knowledge Base documentation.
+
+LITERAL ANSWERING RULES:
+1. ONLY answer using facts explicitly stated in the docs.
+2. If the user asks a question not covered by the docs, YOU MUST NOT GUESS. You must set 'escalate_required': true.
+3. Keep answers concise, empathetic, and in markdown.`,
     mcp_servers: [
       { name: 'resend', label: 'Resend', url: 'https://mcp.resend.com/mcp', description: 'Send escalation emails' },
     ],
@@ -168,9 +190,9 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
       category: 'operations',
       trigger: { type: 'webhook' },
       steps: [
-        { step_id: 'fetch_docs', agent_role: 'data_ingestor', depends_on: [], instructions: 'Fetch the docs URL (llms.txt or configured endpoint). Parse into searchable sections.', data_sources: [{ type: 'web_scrape', url: '' }], input_sources: [], output_keys: ['docs_content'], timeout_ms: 20000 },
-        { step_id: 'answer', agent_role: 'analyst', depends_on: ['fetch_docs'], instructions: 'Search docs for the user question. If found: return answer with source section. If not found: set escalate=true.', input_sources: ['docs_content'], output_keys: ['answer_result'], timeout_ms: 30000 },
-        { step_id: 'deliver', agent_role: 'delivery', depends_on: ['answer'], instructions: 'If answer found: return it. If escalate=true: send email via Resend to support team with question and context.', input_sources: ['answer_result'], output_keys: ['delivery_receipt'], timeout_ms: 15000 },
+        { step_id: 'fetch_docs', agent_role: 'data_ingestor', depends_on: [], instructions: 'Fetch the docs URL and extract plain text. Store in memory.', data_sources: [{ type: 'web_scrape', url: '' }], input_sources: [], output_keys: ['docs_content'], timeout_ms: 20000 },
+        { step_id: 'answer', agent_role: 'analyst', depends_on: ['fetch_docs'], instructions: 'Search docs for question. MUST OUTPUT JSON: { "answer_found": boolean, "escalate_required": boolean, "response_text": "string", "source_citation": "string" }', input_sources: ['docs_content'], output_keys: ['answer_result'], timeout_ms: 30000 },
+        { step_id: 'deliver', agent_role: 'delivery', depends_on: ['answer'], instructions: 'If escalate_required: send email via Resend to support tier 2. If false: return response_text to the user chat webhook.', input_sources: ['answer_result'], output_keys: ['delivery_receipt'], timeout_ms: 15000 },
       ],
       output: { channels: [{ type: 'email', to: [] }, { type: 'webhook', url: '' }] },
     },
@@ -182,7 +204,13 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     description: 'Load and explore datasets, build cohort and funnel reports, answer questions from your Amplitude data.',
     icon: 'BarChart2',
     prompt: 'Analyse the provided dataset or Amplitude event data and answer the question.',
-    system_prompt: 'You are a data analyst. Given a dataset (file path, URL, or query) and a question:\n1. Load the data and print its shape, column names, dtypes, and a small sample. Always look before you compute.\n2. Clean obvious issues — nulls, duplicates, type mismatches — and note what you changed.\n3. Answer the question with code. Prefer pandas for tabular work, matplotlib for charts.\n4. For product-analytics questions, query Amplitude directly — event funnels, retention cohorts, property breakdowns.\n5. Save any charts to /mnt/session/outputs/ and summarise findings in plain language, including caveats (sample size, missing data, correlation-vs-causation).\nDefault to simple, readable analysis over clever one-liners.',
+    system_prompt: `You are a Principal Data Scientist. You analyze datasets with absolute statistical rigor.
+
+METHODOLOGY:
+1. INGESTION: Load data, print shapes, identify dtypes and nulls.
+2. CLEANING: Explicitly declare how missing data or outliers were handled before analysis.
+3. ANALYSIS: Apply proper statistical logic. Distinguish correlation from causation.
+4. SYNTHESIS: Return actionable insights. Provide confidence intervals where applicable.`,
     mcp_servers: [
       { name: 'amplitude', label: 'Amplitude', url: 'https://mcp.amplitude.com/mcp', description: 'Event funnels, cohorts, retention' },
     ],
@@ -193,9 +221,9 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
       category: 'product',
       trigger: { type: 'manual' },
       steps: [
-        { step_id: 'load_data', agent_role: 'data_ingestor', depends_on: [], instructions: 'Load the dataset or query Amplitude for the requested event data. Print shape, columns, sample.', data_sources: [{ type: 'api', connector: 'amplitude' }], input_sources: [], output_keys: ['raw_data'], timeout_ms: 45000 },
-        { step_id: 'analyze', agent_role: 'analyst', depends_on: ['load_data'], instructions: 'Answer the user question. Run funnels, cohorts, or statistical analysis as needed. Generate charts and save to /outputs/.', input_sources: ['raw_data'], output_keys: ['analysis_result'], timeout_ms: 120000 },
-        { step_id: 'deliver', agent_role: 'delivery', depends_on: ['analyze'], instructions: 'Return the analysis summary with key findings, caveats, and links to any generated charts.', input_sources: ['analysis_result'], output_keys: ['delivery_receipt'], timeout_ms: 15000 },
+        { step_id: 'load_data', agent_role: 'data_ingestor', depends_on: [], instructions: 'Fetch raw data from the configured data source. Return raw payload.', data_sources: [{ type: 'api', connector: 'amplitude' }], input_sources: [], output_keys: ['raw_data'], timeout_ms: 45000 },
+        { step_id: 'analyze', agent_role: 'analyst', depends_on: ['load_data'], instructions: 'Perform descriptive statistics. Group data by relevant dimensions. OUTPUT MUST BE JSON schema: { "insights": [{ "metric": "string", "value": "number", "trend": "string", "significance": "number" }], "summary_markdown": "string", "caveats": ["string"] }', input_sources: ['raw_data'], output_keys: ['analysis_result'], timeout_ms: 120000 },
+        { step_id: 'deliver', agent_role: 'delivery', depends_on: ['analyze'], instructions: 'Publish the summary_markdown as a formatted Markdown report document.', input_sources: ['analysis_result'], output_keys: ['delivery_receipt'], timeout_ms: 15000 },
       ],
       output: { channels: [{ type: 'report', format: 'markdown' }] },
     },
@@ -220,7 +248,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
       trigger: { type: 'manual' },
       steps: [
         { step_id: 'research', agent_role: 'data_ingestor', depends_on: [], instructions: 'Search the web and Exa for the lead. Query: email domain, name + company, LinkedIn. Fetch top 3 URLs.', data_sources: [{ type: 'web_scrape', url: '' }], input_sources: [], output_keys: ['research_data'], timeout_ms: 60000 },
-        { step_id: 'qualify', agent_role: 'analyst', depends_on: ['research'], instructions: 'Score the lead: technical role, company size, AI/agent interest, decision-maker status. Output: { score, qualified, company, role, why_interesting, links }', input_sources: ['research_data'], output_keys: ['qualification'], timeout_ms: 45000 },
+        { step_id: 'qualify', agent_role: 'analyst', depends_on: ['research'], instructions: 'Score the lead: technical role, company size, AI/agent interest, decision-maker status. Output: { "score": 0, "qualified": true, "company": "", "role": "", "why_interesting": "", "links": [] }', input_sources: ['research_data'], output_keys: ['qualification'], timeout_ms: 45000 },
         { step_id: 'deliver', agent_role: 'delivery', depends_on: ['qualify'], instructions: 'If qualified=true: post Slack alert with name, role, company, reasoning, and links. If false: return summary only, no Slack.', input_sources: ['qualification'], output_keys: ['delivery_receipt'], timeout_ms: 15000 },
       ],
       output: { channels: [{ type: 'webhook', url: '' }] },
