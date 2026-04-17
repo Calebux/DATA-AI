@@ -7,10 +7,10 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default: 'bg-[rgb(var(--brand))]/15 text-[rgb(var(--brand))]',
-        green: 'bg-[rgb(var(--green))]/15 text-[rgb(var(--green))]',
-        red: 'bg-[rgb(var(--red))]/15 text-[rgb(var(--red))]',
-        yellow: 'bg-[rgb(var(--yellow))]/15 text-[rgb(var(--yellow))]',
-        muted: 'bg-white/8 text-white/50',
+        green:   'bg-[rgb(var(--green))]/15 text-[rgb(var(--green))]',
+        red:     'bg-[rgb(var(--red))]/15 text-[rgb(var(--red))]',
+        yellow:  'bg-[rgb(var(--yellow))]/15 text-[rgb(var(--yellow))]',
+        muted:   'bg-[rgb(var(--border))]/[0.07] text-[rgb(var(--text-muted))]',
       },
     },
     defaultVariants: { variant: 'default' },

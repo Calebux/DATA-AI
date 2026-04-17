@@ -16,27 +16,16 @@ export default function Navbar() {
   const pathname = usePathname()
   const { user, signOut } = useAuth()
 
-  // Workflow detail pages are dark — use a dark navbar there
-  const isDark = !!pathname?.match(/^\/workflows\/[^/]+$/)
-
   return (
-    <nav className={cn(
-      'fixed top-0 inset-x-0 z-40 h-14 border-b backdrop-blur-sm transition-colors',
-      isDark
-        ? 'border-white/8 bg-[#08080c]/95'
-        : 'border-black/10 bg-white/95'
-    )}>
+    <nav className="fixed top-0 inset-x-0 z-40 h-14 bg-black border-b border-white/10">
       <div className="max-w-5xl mx-auto px-5 sm:px-8 h-full flex items-center gap-8">
 
         {/* Logo */}
         <Link href="/" className="flex flex-col leading-none flex-shrink-0 group">
-          <span className={cn(
-            'text-[13px] font-bold tracking-[0.18em] transition-colors',
-            isDark ? 'text-white group-hover:text-white/70' : 'text-black group-hover:text-black/70'
-          )}>
+          <span className="text-[13px] font-bold tracking-[0.18em] text-white group-hover:text-white/70 transition-colors">
             DATA-AI
           </span>
-          <span className={cn('text-[8px] tracking-[0.14em] uppercase mt-0.5', isDark ? 'text-white/25' : 'text-black/30')}>
+          <span className="text-[8px] tracking-[0.14em] uppercase mt-0.5 text-white/25">
             Agent Swarm Automation
           </span>
         </Link>
@@ -50,8 +39,8 @@ export default function Navbar() {
               className={cn(
                 'text-[10px] tracking-[0.14em] font-semibold transition-colors',
                 pathname?.startsWith(link.href)
-                  ? isDark ? 'text-white' : 'text-black'
-                  : isDark ? 'text-white/30 hover:text-white/65' : 'text-black/35 hover:text-black/65'
+                  ? 'text-white'
+                  : 'text-white/30 hover:text-white/65'
               )}
             >
               {link.label}
@@ -63,12 +52,12 @@ export default function Navbar() {
         <div className="ml-auto flex items-center gap-5">
           {user ? (
             <>
-              <span className={cn('hidden sm:block text-[10px] tracking-widest uppercase max-w-[140px] truncate', isDark ? 'text-white/25' : 'text-black/30')}>
+              <span className="hidden sm:block text-[10px] tracking-widest uppercase max-w-[140px] truncate text-white/25">
                 {user.email}
               </span>
               <button
                 onClick={signOut}
-                className={cn('text-[10px] tracking-[0.12em] uppercase transition-colors', isDark ? 'text-white/30 hover:text-white/65' : 'text-black/35 hover:text-black/70')}
+                className="text-[10px] tracking-[0.12em] uppercase transition-colors text-white/30 hover:text-white/65"
               >
                 Sign Out
               </button>
@@ -76,12 +65,7 @@ export default function Navbar() {
           ) : (
             <Link
               href="/auth"
-              className={cn(
-                'px-4 py-1.5 border text-[10px] tracking-[0.12em] uppercase transition-colors',
-                isDark
-                  ? 'border-white/20 text-white/60 hover:text-white hover:border-white/40'
-                  : 'border-black/20 text-black/60 hover:text-black hover:border-black/50'
-              )}
+              className="px-4 py-1.5 border border-white/20 text-[10px] tracking-[0.12em] uppercase transition-colors text-white/60 hover:text-white hover:border-white/40"
             >
               Sign In
             </Link>

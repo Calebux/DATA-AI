@@ -14,6 +14,7 @@
   --red:       220 38  38;
   --yellow:    161 98  7;
   --radius:    0.15rem;
+  --border:    0   0   0;
 }
 
 * { box-sizing: border-box; }
@@ -75,6 +76,7 @@ body {
   --red:       248 113 113;
   --yellow:    251 191 36;
   --radius:    0.25rem;
+  --border:    255 255 255;
 }
 .dark-section .rule     { border-bottom-color: rgba(255,255,255,0.08); }
 .dark-section .rule-top { border-top-color:    rgba(255,255,255,0.08); }
