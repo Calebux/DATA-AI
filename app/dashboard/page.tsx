@@ -12,7 +12,7 @@ import type { Workflow, WorkflowRun } from '@/types'
 import { formatRelative } from '@/lib/utils'
 import {
   TrendingUp, DollarSign, AlertCircle, Search, Target,
-  Server, Wand2, Play, Activity, Bell, BarChart3, BookOpen, User, type LucideProps,
+  Server, Wand2, Play, Activity, Bell, BarChart3, BookOpen, User, Bot, type LucideProps,
 } from 'lucide-react'
 import type { FC } from 'react'
 
