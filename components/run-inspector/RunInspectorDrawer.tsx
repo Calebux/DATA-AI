@@ -113,7 +113,7 @@ export default function RunInspectorDrawer({ open, run, workflow, onClose }: Pro
               <code className="text-[10px] font-mono font-bold bg-white/10 px-1.5 py-0.5 rounded border border-white/20 text-white/80">
                 {run?.id.split('-')[0]}
               </code>
-              <Badge variant="outline" className={`text-[10px] tracking-tight font-medium border-transparent ${
+              <Badge variant="muted" className={`text-[10px] tracking-tight font-medium border-transparent ${
                 run?.status === 'running' ? 'bg-blue-500 text-white' :
                 run?.status === 'complete' ? 'bg-green-500 text-white' :
                 run?.status === 'failed' ? 'bg-red-500 text-white' : 'bg-white/10 text-white'
