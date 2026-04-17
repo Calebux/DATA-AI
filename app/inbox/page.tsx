@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { getSupabase } from '@/lib/supabase'
@@ -10,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { formatRelative } from '@/lib/utils'
 import type { AgentEvent } from '@/types'
 import {
-  ArrowLeft, Bell, AlertTriangle, CheckCircle, XCircle, Clock, User
+  Bell, AlertTriangle, CheckCircle, XCircle, Clock,
 } from 'lucide-react'
 
 interface Escalation {
@@ -158,8 +157,8 @@ export default function InboxPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-apple-gray text-white">
-        <Spinner className="text-white/20" />
+      <div className="flex justify-center py-20">
+        <Spinner className="text-black/20" />
       </div>
     )
   }
@@ -168,24 +167,7 @@ export default function InboxPage() {
   const resolved = escalations.filter(e => e.status !== 'pending')
 
   return (
-    <div className="min-h-screen bg-apple-gray flex flex-col">
-      {/* Top Navbar */}
-      <div className="h-14 glass-nav flex items-center justify-between px-6 sticky top-0 z-20 flex-shrink-0">
-        <div className="flex items-center">
-          <Link href="/dashboard" className="flex items-center gap-2 text-sm font-medium text-white/70 hover:text-white transition-colors mr-6">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-          <div className="flex items-center gap-2 text-white">
-            <Bell className="h-4 w-4 opacity-70" />
-            <h1 className="text-sm font-bold tracking-tight">Action Inbox</h1>
-          </div>
-        </div>
-        <Link href="/profile" className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors">
-          <User className="h-4 w-4" />
-        </Link>
-      </div>
-
-      <div className="flex-1 max-w-4xl mx-auto w-full p-6 space-y-8">
+    <div className="max-w-5xl mx-auto px-5 sm:px-8 py-8 space-y-8">
         
         {/* Pending Escaalations */}
         <section>
@@ -307,6 +289,5 @@ export default function InboxPage() {
         </section>
 
       </div>
-    </div>
   )
 }

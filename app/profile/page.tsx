@@ -1,12 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { getSupabase } from '@/lib/supabase'
 import { Spinner } from '@/components/ui/spinner'
-import { ArrowLeft, User, LogOut, Settings, Mail, Fingerprint, ShieldAlert, Cpu } from 'lucide-react'
+import { LogOut, Settings, Mail, Fingerprint, ShieldAlert, Cpu } from 'lucide-react'
 
 export default function ProfilePage() {
   const { user, loading: authLoading } = useAuth()
@@ -19,7 +18,7 @@ export default function ProfilePage() {
 
   if (authLoading || !user) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-apple-gray">
+      <div className="flex justify-center py-20">
         <Spinner className="text-black/20" />
       </div>
     )
@@ -33,19 +32,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-apple-gray flex flex-col">
-      {/* Top Navbar */}
-      <div className="h-14 glass-nav flex items-center px-6 sticky top-0 z-20 flex-shrink-0">
-        <Link href="/dashboard" className="flex items-center gap-2 text-sm font-medium text-white/70 hover:text-white transition-colors mr-6">
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
-        <div className="flex items-center gap-2 text-white">
-          <User className="h-4 w-4 opacity-70" />
-          <h1 className="text-sm font-bold tracking-tight">My Profile</h1>
-        </div>
-      </div>
-
-      <div className="flex-1 max-w-3xl mx-auto w-full p-6 sm:p-10 space-y-8">
+    <div className="max-w-3xl mx-auto px-5 sm:px-8 py-8 space-y-8">
         
         {/* Header content */}
         <div>
@@ -113,6 +100,5 @@ export default function ProfilePage() {
         </div>
 
       </div>
-    </div>
   )
 }

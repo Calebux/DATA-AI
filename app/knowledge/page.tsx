@@ -1,9 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { ArrowLeft, BookOpen, UploadCloud, FileText, Link as LinkIcon, Trash2, CheckCircle2, User } from 'lucide-react'
+import { UploadCloud, FileText, Link as LinkIcon, Trash2, CheckCircle2 } from 'lucide-react'
 
 interface KnowledgeSource {
   id: string
@@ -86,24 +84,7 @@ export default function KnowledgeBasePage() {
   }
 
   return (
-    <div className="min-h-screen bg-apple-gray flex flex-col">
-      {/* Top Navbar */}
-      <div className="h-14 glass-nav flex items-center justify-between px-6 sticky top-0 z-20 flex-shrink-0">
-        <div className="flex items-center">
-          <Link href="/dashboard" className="flex items-center gap-2 text-sm font-medium text-white/70 hover:text-white transition-colors mr-6">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-          <div className="flex items-center gap-2 text-white">
-            <BookOpen className="h-4 w-4 opacity-70" />
-            <h1 className="text-sm font-bold tracking-tight">Knowledge Base</h1>
-          </div>
-        </div>
-        <Link href="/profile" className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors">
-          <User className="h-4 w-4" />
-        </Link>
-      </div>
-
-      <div className="flex-1 max-w-4xl mx-auto w-full p-6 sm:p-8 space-y-8">
+    <div className="max-w-5xl mx-auto px-5 sm:px-8 py-8 space-y-8">
         
         {/* Header content */}
         <div>
@@ -225,6 +206,5 @@ export default function KnowledgeBasePage() {
           )}
         </div>
       </div>
-    </div>
   )
 }

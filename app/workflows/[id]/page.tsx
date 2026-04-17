@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import type { Workflow, WorkflowRun } from '@/types'
+import type { Workflow, WorkflowRun, Report } from '@/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
@@ -38,6 +38,7 @@ export default function WorkflowDetailPage() {
   const [loading, setLoading] = useState(true)
   const [showRunModal, setShowRunModal] = useState(false)
   const [showEditDrawer, setShowEditDrawer] = useState(false)
+  const [report, setReport] = useState<Report | null>(null)
 
   useEffect(() => {
     if (!user || !id) return
@@ -72,6 +73,15 @@ export default function WorkflowDetailPage() {
 
     return () => { supabase.removeChannel(sub) }
   }, [user, id])
+
+  // Fetch report when active run changes
+  useEffect(() => {
+    const runId = activeRunId ?? runs[0]?.id
+    if (!runId) return
+    const supabase = getSupabase()
+    supabase.from('reports').select('*').eq('run_id', runId).maybeSingle()
+      .then(({ data }) => setReport(data as Report | null))
+  }, [activeRunId, runs])
 
   if (loading) return <div className="flex justify-center pt-28"><Spinner size="lg" className="text-black/30" /></div>
   if (!workflow) return <p className="text-center py-28 text-black/40">Workflow not found</p>
@@ -139,6 +149,7 @@ export default function WorkflowDetailPage() {
                 {activeRunId && <TabsTrigger value="consensus">Consensus</TabsTrigger>}
                 {activeRunId && <TabsTrigger value="comms">Comms</TabsTrigger>}
                 <TabsTrigger value="triggers">Triggers</TabsTrigger>
+                <TabsTrigger value="report">Report</TabsTrigger>
               </TabsList>
 
               {/* Overview — light card */}
@@ -238,6 +249,26 @@ export default function WorkflowDetailPage() {
               <TabsContent value="triggers">
                 <div className="bg-white border border-black/8 rounded-xl p-5">
                   <WebhookExecutor workflowId={workflow.id} />
+                </div>
+              </TabsContent>
+
+              {/* Report */}
+              <TabsContent value="report">
+                <div className="bg-white border border-black/8 rounded-xl p-5">
+                  {report ? (
+                    <ReportRenderer
+                      report={{
+                        ...(report.content as Record<string, unknown>).report as Record<string, unknown>,
+                        eval_result: (report.content as Record<string, unknown>).eval_result,
+                      }}
+                      title={report.title}
+                    />
+                  ) : (
+                    <div className="text-center py-12">
+                      <p className="text-sm text-black/30">No report yet</p>
+                      <p className="text-xs text-black/20 mt-1">Reports are generated after a completed run with a delivery step.</p>
+                    </div>
+                  )}
                 </div>
               </TabsContent>
             </Tabs>

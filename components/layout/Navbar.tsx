@@ -1,18 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import { cn } from '@/lib/utils'
-
-const NAV_LINKS = [
-  { href: '/dashboard', label: 'WORKFLOWS' },
-  { href: '/agents',    label: 'AGENTS' },
-  { href: '/reports',   label: 'REPORTS' },
-]
 
 export default function Navbar() {
-  const pathname = usePathname()
   const router = useRouter()
   const { user, signOut } = useAuth()
 
@@ -23,7 +15,7 @@ export default function Navbar() {
 
   return (
     <nav className="fixed top-0 inset-x-0 z-40 h-14 bg-black border-b border-white/10">
-      <div className="max-w-5xl mx-auto px-5 sm:px-8 h-full flex items-center gap-8">
+      <div className="max-w-5xl mx-auto px-5 sm:px-8 h-full flex items-center">
 
         {/* Logo */}
         <Link href="/" className="flex flex-col leading-none flex-shrink-0 group">
@@ -35,24 +27,6 @@ export default function Navbar() {
           </span>
         </Link>
 
-        {/* Nav links */}
-        <div className="hidden sm:flex items-center gap-7 flex-1">
-          {NAV_LINKS.map(link => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={cn(
-                'text-[10px] tracking-[0.14em] font-semibold transition-colors',
-                pathname?.startsWith(link.href)
-                  ? 'text-white'
-                  : 'text-white/30 hover:text-white/65'
-              )}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </div>
-
         {/* Auth */}
         <div className="ml-auto flex items-center gap-5">
           {user ? (
@@ -60,6 +34,12 @@ export default function Navbar() {
               <span className="hidden sm:block text-[10px] tracking-widest uppercase max-w-[140px] truncate text-white/25">
                 {user.email}
               </span>
+              <Link
+                href="/profile"
+                className="text-[10px] tracking-[0.12em] uppercase transition-colors text-white/30 hover:text-white/65"
+              >
+                Profile
+              </Link>
               <button
                 onClick={handleSignOut}
                 className="text-[10px] tracking-[0.12em] uppercase transition-colors text-white/30 hover:text-white/65"
