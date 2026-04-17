@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// Service-role client: no user session required — external callers don't have browser cookies.
-const adminSupabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+export const dynamic = 'force-dynamic'
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ workflowId: string }> }
 ) {
   const { workflowId } = await params
+
+  // Service-role client — created per-request so env vars are available at runtime
+  const adminSupabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
 
   // 1. Load the workflow
   const { data: workflow, error: wfError } = await adminSupabase
