@@ -9,24 +9,38 @@ import OrchestratorModal from '@/components/orchestrator-modal/OrchestratorModal
 import { Spinner } from '@/components/ui/spinner'
 import type { Workflow, WorkflowRun } from '@/types'
 import { formatRelative } from '@/lib/utils'
+import {
+  TrendingUp, DollarSign, AlertCircle, Search, Target,
+  Server, Wand2, Play, type LucideProps,
+} from 'lucide-react'
+import type { FC } from 'react'
+
+const TEMPLATE_ICON_MAP: Record<string, FC<LucideProps>> = {
+  TrendingUp, DollarSign, AlertCircle, Search, Target, Server, Wand2,
+}
+function WorkflowIcon({ icon, className }: { icon?: string; className?: string }) {
+  const Icon = TEMPLATE_ICON_MAP[icon ?? ''] ?? Wand2
+  return <Icon className={className} />
+}
 
 const CATEGORY_LABELS: Record<string, string> = {
-  finance_executive: 'FINANCE',
-  customer_success:  'CUST. SUCCESS',
-  sales:             'SALES',
-  marketing:         'MARKETING',
-  product:           'PRODUCT',
-  operations:        'OPERATIONS',
-  hr:                'HR',
-  custom:            'CUSTOM',
+  finance_executive: 'Finance', customer_success: 'Customer Success',
+  sales: 'Sales', marketing: 'Marketing', product: 'Product',
+  operations: 'Operations', hr: 'HR', custom: 'Custom',
+}
+
+const STATUS_DOT: Record<string, string> = {
+  running: 'bg-green-500 animate-pulse',
+  active:  'bg-black/30',
+  paused:  'bg-black/15',
 }
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const [workflows, setWorkflows] = useState<Workflow[]>([])
-  const [lastRuns, setLastRuns] = useState<Record<string, WorkflowRun>>({})
-  const [loading, setLoading] = useState(true)
+  const [lastRuns,  setLastRuns]  = useState<Record<string, WorkflowRun>>({})
+  const [loading,   setLoading]   = useState(true)
   const [runTarget, setRunTarget] = useState<Workflow | null>(null)
 
   useEffect(() => {
@@ -40,7 +54,6 @@ export default function DashboardPage() {
       const { data: wfs } = await supabase
         .from('workflows').select('*')
         .eq('user_id', user!.id).order('created_at', { ascending: false })
-
       if (!wfs?.length) { setLoading(false); return }
       setWorkflows(wfs as Workflow[])
 
@@ -63,13 +76,6 @@ export default function DashboardPage() {
     return <div className="flex justify-center pt-28"><Spinner size="sm" className="text-black/20" /></div>
   }
 
-  const running = workflows.filter(w => lastRuns[w.id]?.status === 'running')
-  const rest    = workflows.filter(w => lastRuns[w.id]?.status !== 'running')
-  const ordered = [...running, ...rest]
-
-  const totalRuns    = Object.values(lastRuns).length
-  const failureCount = Object.values(lastRuns).filter(r => r.status === 'failed').length
-
   return (
     <div className="max-w-5xl mx-auto px-5 sm:px-8 pt-10 pb-24">
 
@@ -81,102 +87,119 @@ export default function DashboardPage() {
         </div>
         <Link
           href="/workflows/new"
-          className="px-4 py-1.5 border border-black/15 text-[10px] tracking-[0.12em] uppercase text-black/45 hover:text-black hover:border-black/40 transition-colors"
+          className="px-4 py-1.5 bg-black text-white text-[10px] tracking-[0.12em] uppercase font-semibold hover:bg-black/80 transition-colors"
         >
-          + New
+          + New Workflow
         </Link>
       </div>
 
       {workflows.length === 0 ? (
-        <div className="py-24 text-center">
+        <div className="py-24 text-center border border-black/8 rounded-xl">
           <p className="section-label mb-4">No workflows yet</p>
           <p className="text-sm text-black/35 mb-8 max-w-sm mx-auto leading-relaxed">
-            Create your first workflow to start automating complex tasks with AI agent swarms.
+            Create your first workflow to start automating with AI agent swarms.
           </p>
           <Link
             href="/workflows/new"
-            className="inline-block px-6 py-2 border border-black/20 text-[10px] tracking-[0.12em] uppercase text-black/55 hover:text-black hover:border-black/45 transition-colors"
+            className="inline-block px-6 py-2.5 bg-black text-white text-[10px] tracking-[0.14em] uppercase font-semibold hover:bg-black/80 transition-colors"
           >
             Create Workflow
           </Link>
         </div>
       ) : (
-        <>
-          {/* Workflow list */}
-          <div className="mb-12">
-            <p className="section-label mb-0 pb-2.5 rule">
-              {running.length > 0 ? `Active & Scheduled — ${running.length} Live` : 'All Workflows'}
-            </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {workflows.map(wf => {
+            const run    = lastRuns[wf.id]
+            const isLive = run?.status === 'running'
+            const dotCls = isLive ? STATUS_DOT.running : STATUS_DOT.active
 
-            {ordered.map((wf, i) => {
-              const run    = lastRuns[wf.id]
-              const isLive = run?.status === 'running'
-              const num    = String(i + 1).padStart(2, '0')
-
-              return (
-                <div
-                  key={wf.id}
-                  className={`flex items-center gap-4 px-0 py-3.5 rule cursor-pointer group transition-colors ${isLive ? 'row-inverted' : 'hover:bg-black/3'}`}
-                  onClick={() => router.push(isLive ? `/workflows/${wf.id}?run=${run.id}` : `/workflows/${wf.id}`)}
-                >
-                  <span className={`row-num ${isLive ? 'row-num' : ''}`}>{num}.</span>
-
-                  <div className="flex-1 min-w-0 flex items-baseline gap-2">
-                    <span className={`text-[13px] font-semibold tracking-tight flex-shrink-0 ${isLive ? 'text-white' : 'text-black'}`}>
-                      {wf.name}
-                    </span>
-                    {wf.description && (
-                      <>
-                        <span className={`text-xs flex-shrink-0 ${isLive ? 'text-white/30' : 'text-black/20'}`}>—</span>
-                        <span className={`text-xs truncate ${isLive ? 'text-white/55' : 'text-black/40'}`}>
-                          {wf.description}
-                        </span>
-                      </>
-                    )}
+            return (
+              <div
+                key={wf.id}
+                className="bg-white border border-black/10 rounded-xl p-5 flex flex-col gap-4 hover:border-black/25 hover:shadow-sm transition-all cursor-pointer group"
+                onClick={() => router.push(isLive ? `/workflows/${wf.id}?run=${run.id}` : `/workflows/${wf.id}`)}
+              >
+                {/* Top row: icon + name + status dot */}
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 border border-black/10 rounded-lg flex items-center justify-center flex-shrink-0 bg-black/[0.02]">
+                    <WorkflowIcon
+                      icon={wf.definition?.name ? undefined : undefined}
+                      className="h-4 w-4 text-black/40"
+                    />
                   </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold text-black leading-tight truncate group-hover:text-black/80">
+                      {wf.name}
+                    </h3>
+                    <p className="text-[10px] text-black/35 mt-0.5">
+                      {CATEGORY_LABELS[wf.category] ?? wf.category}
+                    </p>
+                  </div>
+                  <span className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${dotCls}`} />
+                </div>
 
+                {/* Description */}
+                {wf.description && (
+                  <p className="text-xs text-black/45 leading-relaxed line-clamp-2 -mt-1">
+                    {wf.description}
+                  </p>
+                )}
+
+                {/* Meta row */}
+                <div className="flex items-center gap-3 text-[10px] text-black/30">
+                  <span>{wf.definition.steps.length} agents</span>
+                  <span>·</span>
+                  <span className="capitalize">{wf.definition.trigger.type.replace('_', ' ')}</span>
                   {run && (
-                    <span className={`hidden sm:block text-[10px] flex-shrink-0 ${isLive ? 'text-white/40' : 'text-black/25'}`}>
-                      {isLive ? 'running now' : formatRelative(run.triggered_at)}
-                    </span>
-                  )}
-
-                  <span className={`text-[9px] tracking-[0.1em] uppercase px-2 py-0.5 border flex-shrink-0 ${isLive ? 'border-white/20 text-white/60' : 'border-black/15 text-black/40'}`}>
-                    {isLive ? 'LIVE' : (CATEGORY_LABELS[wf.category] ?? wf.category.toUpperCase())}
-                  </span>
-
-                  {!isLive && (
-                    <button
-                      onClick={e => { e.stopPropagation(); setRunTarget(wf) }}
-                      className="hidden sm:block text-[9px] tracking-widest uppercase text-black/25 hover:text-black/60 transition-colors px-2 py-0.5 border border-transparent hover:border-black/15 flex-shrink-0"
-                    >
-                      Run
-                    </button>
+                    <>
+                      <span>·</span>
+                      <span>{isLive ? <span className="text-green-600 font-medium">Running now</span> : formatRelative(run.triggered_at)}</span>
+                    </>
                   )}
                 </div>
-              )
-            })}
-          </div>
 
-          {/* System stats */}
-          <div>
-            <p className="section-label mb-0 pb-2.5 rule">System Stats</p>
-            {[
-              { label: 'Total Workflows',   desc: 'Configured automations',  value: workflows.length },
-              { label: 'Runs Recorded',     desc: 'Executions tracked',       value: totalRuns },
-              { label: 'Active Now',        desc: 'Currently executing',      value: running.length },
-              { label: 'Failed Last Cycle', desc: 'Runs ending in error',     value: failureCount },
-            ].map(({ label, desc, value }) => (
-              <div key={label} className="flex items-center gap-4 py-3.5 rule">
-                <span className="row-num text-[9px] tracking-widest text-black/25">STAT</span>
-                <span className="text-[13px] font-semibold text-black flex-shrink-0">{label}</span>
-                <span className="text-xs text-black/20 mx-1">—</span>
-                <span className="text-xs text-black/40 flex-1">{desc}</span>
-                <span className="text-sm font-bold text-black tabular-nums">{value}</span>
+                {/* Last run quality */}
+                {run?.quality_score != null && (
+                  <div className="h-1 bg-black/6 rounded-full overflow-hidden -mt-1">
+                    <div
+                      className="h-full bg-black/40 rounded-full"
+                      style={{ width: `${run.quality_score * 100}%` }}
+                    />
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 pt-1 border-t border-black/6 -mx-5 px-5 mt-auto">
+                  <Link
+                    href={`/workflows/${wf.id}`}
+                    onClick={e => e.stopPropagation()}
+                    className="text-[10px] tracking-[0.1em] uppercase text-black/35 hover:text-black transition-colors"
+                  >
+                    View
+                  </Link>
+                  <div className="flex-1" />
+                  <button
+                    onClick={e => { e.stopPropagation(); setRunTarget(wf) }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-black text-white text-[10px] tracking-[0.1em] uppercase font-semibold rounded-md hover:bg-black/80 transition-colors"
+                  >
+                    <Play className="h-3 w-3" /> Run
+                  </button>
+                </div>
               </div>
-            ))}
-          </div>
-        </>
+            )
+          })}
+
+          {/* Add new card */}
+          <Link
+            href="/workflows/new"
+            className="border border-dashed border-black/15 rounded-xl p-5 flex flex-col items-center justify-center gap-2 hover:border-black/30 hover:bg-black/[0.02] transition-all min-h-[180px] group"
+          >
+            <span className="text-2xl font-thin text-black/20 group-hover:text-black/40 transition-colors">+</span>
+            <span className="text-[10px] tracking-[0.12em] uppercase text-black/30 group-hover:text-black/50 transition-colors">
+              New Workflow
+            </span>
+          </Link>
+        </div>
       )}
 
       {runTarget && (
