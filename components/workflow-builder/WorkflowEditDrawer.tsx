@@ -6,7 +6,7 @@ import { Spinner } from '@/components/ui/spinner'
 import type { Workflow, McpServer } from '@/types'
 import {
   X, Check, Save, Bot, ToggleLeft, ToggleRight,
-  Play, Repeat, CalendarDays, Clock, Webhook,
+  Play, Repeat, CalendarDays, Clock, Webhook, Database,
   type LucideProps,
 } from 'lucide-react'
 import type { FC } from 'react'
@@ -63,7 +63,16 @@ function detectTrigger(workflow: Workflow): TriggerChoice {
 
 // ── Tab types ─────────────────────────────────────────────────────────────
 
-type DrawerTab = 'ai' | 'schedule'
+type DrawerTab = 'data' | 'ai' | 'schedule'
+
+interface ConfiguredDataSource {
+  type: string
+  connector?: string
+  url?: string
+  spreadsheet_id?: string
+  credentials_key?: string
+  _step_id?: string
+}
 
 // ── Props ─────────────────────────────────────────────────────────────────
 
@@ -89,6 +98,17 @@ export default function WorkflowEditDrawer({ open, workflow, onClose, onSaved }:
     (workflow.definition.mcp_servers ?? []).map(s => ({ ...s }))
   )
 
+  // Data Sources
+  const [dsConfig, setDsConfig] = useState<ConfiguredDataSource[]>(() => {
+    const sources: ConfiguredDataSource[] = []
+    workflow.definition.steps.forEach(s => {
+      s.data_sources?.forEach(ds => {
+        sources.push({ ...ds, _step_id: s.step_id })
+      })
+    })
+    return sources
+  })
+
   // Schedule
   const [trigger,  setTrigger]  = useState<TriggerChoice>(detectTrigger(workflow))
   const [timezone, setTimezone] = useState(workflow.definition.trigger.timezone ?? 'America/New_York')
@@ -103,6 +123,15 @@ export default function WorkflowEditDrawer({ open, workflow, onClose, onSaved }:
     setWfName(workflow.name)
     setSystemPrompt(workflow.definition.system_prompt ?? '')
     setMcpServers((workflow.definition.mcp_servers ?? []).map(s => ({ ...s })))
+    
+    const sources: ConfiguredDataSource[] = []
+    workflow.definition.steps.forEach(s => {
+      s.data_sources?.forEach(ds => {
+        sources.push({ ...ds, _step_id: s.step_id })
+      })
+    })
+    setDsConfig(sources)
+    
     setTrigger(detectTrigger(workflow))
     const tz = workflow.definition.trigger.timezone ?? 'America/New_York'
     setTimezone(tz)
@@ -116,14 +145,28 @@ export default function WorkflowEditDrawer({ open, workflow, onClose, onSaved }:
     setMcpServers(prev => prev.map((s, i) => i === idx ? { ...s, enabled: !s.enabled } : s))
   }
 
+  function updateDsConfig(idx: number, updates: Partial<ConfiguredDataSource>) {
+    setDsConfig(prev => prev.map((item, i) => i === idx ? { ...item, ...updates } : item))
+  }
+
   const showTimePicker = trigger === 'daily' || trigger === 'weekly' || trigger === 'monthly'
 
   async function handleSave() {
     setSaving(true); setSaved(false); setError('')
 
     const cronExpr = buildCron(trigger, hour, weekday)
+    
+    const newSteps = JSON.parse(JSON.stringify(workflow.definition.steps))
+    for (const stepConfig of newSteps) {
+      const associatedDs = dsConfig.filter(ds => ds._step_id === stepConfig.step_id)
+      if (associatedDs.length > 0) {
+        stepConfig.data_sources = associatedDs.map(({ _step_id, ...ds }) => ds)
+      }
+    }
+
     const updatedDefinition = {
       ...workflow.definition,
+      steps: newSteps,
       system_prompt: systemPrompt || undefined,
       mcp_servers: mcpServers.length > 0 ? mcpServers : undefined,
       trigger: {
@@ -185,7 +228,7 @@ export default function WorkflowEditDrawer({ open, workflow, onClose, onSaved }:
 
         {/* Tabs */}
         <div className="flex border-b border-black/8 mt-5 px-6 flex-shrink-0">
-          {([['ai', 'AI Config'], ['schedule', 'Schedule']] as [DrawerTab, string][]).map(([tab, label]) => (
+          {([['data', 'Data Sources'], ['ai', 'AI Config'], ['schedule', 'Schedule']] as [DrawerTab, string][]).map(([tab, label]) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={`mr-6 pb-3 text-[10px] tracking-[0.12em] uppercase font-semibold transition-colors border-b-2 -mb-px ${
                 activeTab === tab ? 'text-black border-black' : 'text-black/30 border-transparent hover:text-black/60'
@@ -197,6 +240,66 @@ export default function WorkflowEditDrawer({ open, workflow, onClose, onSaved }:
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+
+          {/* ── Data Sources tab ── */}
+          {activeTab === 'data' && (
+            <>
+              {dsConfig.length === 0 ? (
+                <div className="border border-black/8 p-5 text-center rounded-xl">
+                  <Database className="h-5 w-5 text-black/20 mx-auto mb-2" />
+                  <p className="section-label">No Data Sources</p>
+                  <p className="text-xs text-black/35 mt-1">This workflow doesn't connect to any external data.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {dsConfig.map((ds, idx) => (
+                    <div key={idx} className="bg-white border border-black/10 rounded-xl p-5 shadow-sm">
+                      <div className="flex items-center gap-2 mb-4">
+                        <span className="text-xs font-mono bg-black/5 text-black/50 px-2 py-0.5 rounded border border-black/10">
+                          {ds._step_id}
+                        </span>
+                        <span className="text-sm font-semibold uppercase tracking-wider text-black">
+                          {ds.connector || ds.type.replace('_', ' ')}
+                        </span>
+                      </div>
+
+                      {ds.type === 'web_scrape' && (
+                        <div>
+                          <label className="section-label block mb-1.5">Target URL</label>
+                          <input
+                            type="url"
+                            className="w-full border border-black/15 bg-transparent rounded-md px-3 py-2 text-sm focus:border-black/40 outline-none"
+                            value={ds.url || ''}
+                            onChange={e => updateDsConfig(idx, { url: e.target.value })}
+                          />
+                        </div>
+                      )}
+
+                      {ds.type === 'google_sheets' && (
+                        <div>
+                          <label className="section-label block mb-1.5">Spreadsheet ID</label>
+                          <input
+                            type="text"
+                            className="w-full border border-black/15 bg-black/5 rounded-md px-3 py-2 text-sm font-mono focus:border-black/40 outline-none"
+                            value={ds.spreadsheet_id || ''}
+                            onChange={e => updateDsConfig(idx, { spreadsheet_id: e.target.value })}
+                          />
+                        </div>
+                      )}
+
+                      {ds.type === 'api' && (
+                        <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-md">
+                          <p className="text-xs text-yellow-800">
+                            Uses the <strong>{ds.connector}</strong> integration. Manage keys in env.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
 
           {/* ── AI Config tab ── */}
           {activeTab === 'ai' && (
