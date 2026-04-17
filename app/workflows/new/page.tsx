@@ -313,7 +313,7 @@ export default function NewWorkflowPage() {
                       <TemplateIcon name={t.icon} className="h-5 w-5" />
                     </div>
                     {t.id === 'custom' && (
-                      <Badge variant="outline" className="text-[9px] uppercase tracking-wider text-black border-black/15">Start blank</Badge>
+                      <Badge variant="muted" className="text-[9px] uppercase tracking-wider text-black border-black/15">Start blank</Badge>
                     )}
                   </div>
                   <h3 className="font-bold text-black text-base">{t.name}</h3>
@@ -411,7 +411,7 @@ export default function NewWorkflowPage() {
                 {dsConfig.map((ds, idx) => (
                   <div key={idx} className="bg-white border border-black/10 rounded-xl p-5 shadow-sm">
                     <div className="flex items-center gap-2 mb-4">
-                      <Badge variant="outline" className="bg-black/5 border-black/10 text-black/60 font-mono">
+                      <Badge variant="muted" className="bg-black/5 border-black/10 text-black/60 font-mono">
                         {ds._step_id}
                       </Badge>
                       <span className="text-sm font-semibold uppercase tracking-wider text-black">{ds.connector || ds.type.replace('_', ' ')}</span>
@@ -510,7 +510,7 @@ export default function NewWorkflowPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-semibold text-black">{server.label}</span>
-                            <Badge variant="outline" className="text-[9px] font-mono border-black/10 text-black/40 px-1.5 py-0.5">{server.name}</Badge>
+                            <Badge variant="muted" className="text-[9px] font-mono border-black/10 text-black/40 px-1.5 py-0.5">{server.name}</Badge>
                           </div>
                           <p className="text-xs text-black/50 mt-1">{server.description}</p>
                           <p className="text-[10px] text-black/30 font-mono mt-1.5 truncate">{server.url}</p>
