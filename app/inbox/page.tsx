@@ -228,7 +228,7 @@ export default function InboxPage() {
                           </code>
                           <span className="text-xs text-black/40">&bull;</span>
                           <span className="text-xs font-semibold text-black/60">{e.workflow_name}</span>
-                          <Badge variant="outline" className={`text-[9px] tracking-wider uppercase ml-2 ${
+                          <Badge variant="muted" className={`text-[9px] tracking-wider uppercase ml-2 ${
                             e.severity.includes('P1') ? 'bg-red-500/10 text-red-700 border-red-500/20' : 
                             'bg-orange-500/10 text-orange-700 border-orange-500/20'
                           }`}>
