@@ -130,6 +130,7 @@ export default function RunsDashboardPage() {
   }
 
   return (
+    <>
     <div className="overflow-x-auto">
         <div className="min-w-fit flex h-full p-6 items-start gap-6">
           
@@ -200,6 +201,6 @@ export default function RunsDashboardPage() {
         workflow={selectedRun?.workflow || null} 
         onClose={() => setSelectedRun(null)} 
       />
-    </div>
+    </>
   )
 }
