@@ -1,9 +1,9 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import OpenAI from 'https://esm.sh/openai@4'
+import Anthropic from 'npm:@anthropic-ai/sdk'
 import type { WorkflowStep, EvalResult } from '../_shared/types.ts'
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
-const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY')! })
+const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! })
 
 Deno.serve(async (req) => {
   const { step, input, run_id }: { step: WorkflowStep; input: Record<string, unknown>; run_id: string } = await req.json()
@@ -15,25 +15,31 @@ Deno.serve(async (req) => {
   do {
     attempts++
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1024,
+      system: 'You are a quality control agent. Score reports on completeness, specificity, actionability, and tone (0.0–1.0 each). Be strict — 0.75 is the minimum bar. Respond with valid JSON only — no markdown, no code fences.',
       messages: [
-        {
-          role: 'system',
-          content: 'You are a quality control agent. Score reports on completeness, specificity, actionability, and tone (0.0–1.0 each). Be strict — 0.75 is the minimum bar.',
-        },
         {
           role: 'user',
           content: `Score this report:\n\`\`\`json\n${JSON.stringify(currentInput.synthesized_report, null, 2)}\n\`\`\`\n\n${step.instructions}`,
         },
       ],
-      response_format: { type: 'json_object' },
     })
 
-    evalResult = JSON.parse(completion.choices[0].message.content!) as EvalResult
+    const content = message.content[0]
+    if (content.type !== 'text') throw new Error('Unexpected response type')
+
+    let parsed: EvalResult
+    try {
+      parsed = JSON.parse(content.text) as EvalResult
+    } catch {
+      const match = content.text.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
+      parsed = JSON.parse(match ? match[1] : content.text) as EvalResult
+    }
+    evalResult = parsed
 
     if (!evalResult.pass && attempts < (step.max_retries ?? 2)) {
-      // Retry synthesis with feedback
       const { data } = await supabase.functions.invoke('agent-analyst', {
         body: {
           step: {
