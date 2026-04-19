@@ -111,7 +111,7 @@ export default function SwarmVisualizer({ steps, runId, running, replayEvents }:
       .from('agent_events').select('*').eq('run_id', runId).order('created_at', { ascending: true })
       .then(({ data }) => { if (data) setLiveEvents(data as AgentEvent[]) })
 
-    const ch = supabase.channel(`viz:${runId}`)
+    const ch = supabase.channel(`run:${runId}`)
       .on('broadcast', { event: 'agent_event' }, ({ payload }) => {
         setLiveEvents(prev => [...prev, { ...payload, id: crypto.randomUUID(), run_id: runId } as AgentEvent])
       })
