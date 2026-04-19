@@ -46,7 +46,7 @@ export default function RunInspectorDrawer({ open, run, workflow, onClose }: Pro
         .order('created_at', { ascending: true })
 
       const { data: mems } = await supabase
-        .from('agent_memories')
+        .from('agent_memory')
         .select('*')
         .eq('run_id', run!.id)
 

@@ -205,10 +205,10 @@ export default function NewWorkflowPage() {
 
     // 2. Handle Custom Template Auto-Generation
     if (template.id === 'custom' && customDsType !== 'none') {
-      const newDs: DataSource = { type: customDsType }
-      // Just copy the first item from dsConfig if it exists to populate url/spreadsheet_id
+      const newDs: DataSource = { type: customDsType as DataSource['type'] }
       if (dsConfig[0]) {
         if (dsConfig[0].url) newDs.url = dsConfig[0].url
+        if (dsConfig[0].bearer_token) newDs.bearer_token = dsConfig[0].bearer_token
         if (dsConfig[0].spreadsheet_id) newDs.spreadsheet_id = dsConfig[0].spreadsheet_id
       }
       
@@ -345,9 +345,9 @@ export default function NewWorkflowPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                   {[
                     { type: 'none', label: 'None', icon: Play },
+                    { type: 'http', label: 'REST API', icon: Database },
                     { type: 'web_scrape', label: 'Web Scrape', icon: Globe },
                     { type: 'google_sheets', label: 'Google Sheets', icon: FileSpreadsheet },
-                    { type: 'api', label: 'REST API', icon: Database },
                   ].map(opt => {
                     const active = customDsType === opt.type
                     const Icon = opt.icon
@@ -368,19 +368,40 @@ export default function NewWorkflowPage() {
                     <p className="text-xs text-black/50 mb-4 bg-blue-500/10 text-blue-800 p-3 rounded border border-blue-500/20">
                       We will automatically generate a <strong className="font-mono">data_ingestor</strong> and an <strong className="font-mono">analyst</strong> agent step for you to parse this source.
                     </p>
-                    {customDsType === 'web_scrape' && (
-                      <div>
-                        <label className="text-xs font-semibold uppercase tracking-wider text-black/50 mb-1.5 block">Target URL</label>
-                        <input
-                          type="url"
-                          placeholder="https://example.com/data"
-                          className="w-full border border-black/15 rounded-md px-3 py-2 text-sm focus:border-black/40 outline-none"
-                          value={dsConfig[0]?.url || ''}
-                          onChange={e => {
-                            if (dsConfig.length === 0) setDsConfig([{ type: 'web_scrape', url: e.target.value }])
-                            else updateDsConfig(0, { url: e.target.value })
-                          }}
-                        />
+                    {(customDsType === 'http' || customDsType === 'web_scrape') && (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-xs font-semibold uppercase tracking-wider text-black/50 mb-1.5 block">
+                            {customDsType === 'web_scrape' ? 'URL to Scrape' : 'API Endpoint URL'}
+                          </label>
+                          <input
+                            type="url"
+                            placeholder="https://api.example.com/v1/data"
+                            className="w-full border border-black/15 rounded-md px-3 py-2 text-sm focus:border-black/40 outline-none font-mono"
+                            value={dsConfig[0]?.url || ''}
+                            onChange={e => {
+                              if (dsConfig.length === 0) setDsConfig([{ type: customDsType as DataSource['type'], url: e.target.value }])
+                              else updateDsConfig(0, { url: e.target.value })
+                            }}
+                          />
+                        </div>
+                        {customDsType === 'http' && (
+                          <div>
+                            <label className="text-xs font-semibold uppercase tracking-wider text-black/50 mb-1.5 block">
+                              Bearer Token <span className="normal-case font-normal text-black/30">(optional)</span>
+                            </label>
+                            <input
+                              type="password"
+                              placeholder="sk_live_… or API key"
+                              className="w-full border border-black/15 rounded-md px-3 py-2 text-sm focus:border-black/40 outline-none font-mono"
+                              value={dsConfig[0]?.bearer_token || ''}
+                              onChange={e => {
+                                if (dsConfig.length === 0) setDsConfig([{ type: 'http', bearer_token: e.target.value }])
+                                else updateDsConfig(0, { bearer_token: e.target.value })
+                              }}
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                     {customDsType === 'google_sheets' && (
@@ -414,19 +435,40 @@ export default function NewWorkflowPage() {
                       <Badge variant="muted" className="bg-black/5 border-black/10 text-black/60 font-mono">
                         {ds._step_id}
                       </Badge>
-                      <span className="text-sm font-semibold uppercase tracking-wider text-black">{ds.connector || ds.type.replace('_', ' ')}</span>
+                      <span className="text-sm font-semibold uppercase tracking-wider text-black">
+                        {ds.label || ds.type.replace(/_/g, ' ')}
+                      </span>
                     </div>
 
-                    {ds.type === 'web_scrape' && (
-                      <div>
-                        <label className="text-xs font-semibold uppercase tracking-wider text-black/50 mb-1.5 block">URL to Scrape</label>
-                        <input
-                          type="url"
-                          placeholder="https://..."
-                          className="w-full border border-black/15 rounded-md px-3 py-2 text-sm focus:border-black/40 outline-none"
-                          value={ds.url || ''}
-                          onChange={e => updateDsConfig(idx, { url: e.target.value })}
-                        />
+                    {(ds.type === 'http' || ds.type === 'web_scrape') && (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-xs font-semibold uppercase tracking-wider text-black/50 mb-1.5 block">
+                            {ds.type === 'web_scrape' ? 'URL to Scrape' : 'API Endpoint URL'}
+                          </label>
+                          <input
+                            type="url"
+                            placeholder="https://api.example.com/v1/data"
+                            className="w-full border border-black/15 rounded-md px-3 py-2 text-sm focus:border-black/40 outline-none font-mono"
+                            value={ds.url || ''}
+                            onChange={e => updateDsConfig(idx, { url: e.target.value })}
+                          />
+                        </div>
+                        {ds.type === 'http' && (
+                          <div>
+                            <label className="text-xs font-semibold uppercase tracking-wider text-black/50 mb-1.5 block">
+                              Bearer Token <span className="normal-case font-normal text-black/30">(optional)</span>
+                            </label>
+                            <input
+                              type="password"
+                              placeholder="sk_live_… or API key"
+                              className="w-full border border-black/15 rounded-md px-3 py-2 text-sm focus:border-black/40 outline-none font-mono"
+                              value={ds.bearer_token || ''}
+                              onChange={e => updateDsConfig(idx, { bearer_token: e.target.value })}
+                            />
+                            <p className="text-[10px] text-black/30 mt-1">Sent as <code className="bg-black/5 px-0.5">Authorization: Bearer …</code></p>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -439,14 +481,6 @@ export default function NewWorkflowPage() {
                           value={ds.spreadsheet_id || ''}
                           onChange={e => updateDsConfig(idx, { spreadsheet_id: e.target.value })}
                         />
-                      </div>
-                    )}
-
-                    {ds.type === 'api' && (
-                      <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-md">
-                        <p className="text-xs text-yellow-800">
-                          This template uses the <strong>{ds.connector}</strong> built-in integration. Ensure your generic API keys are set in the application environment.
-                        </p>
                       </div>
                     )}
                   </div>

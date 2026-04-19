@@ -39,9 +39,14 @@ Deno.serve(async (req) => {
   const workingMemory: Record<string, unknown> = { trigger_context }
 
   try {
+    const deliveryMeta = {
+      workflow_name: workflow.definition.name,
+      channels: workflow.definition.output.channels,
+    }
+
     for (const phase of taskGraph.phases) {
       const results = await Promise.allSettled(
-        phase.map(step => spawnAgent(step, runId, workingMemory, channel, system_prompt))
+        phase.map(step => spawnAgent(step, runId, workingMemory, channel, system_prompt, deliveryMeta))
       )
       for (const result of results) {
         if (result.status === 'fulfilled') {
@@ -57,6 +62,28 @@ Deno.serve(async (req) => {
       .eq('id', runId)
 
     await emit(channel, runId, 'WORKFLOW_COMPLETE', 'orchestrator', {})
+
+    // Always write a report record so the Report tab has something to show
+    const reportData: Record<string, string> = {}
+    for (const [key, val] of Object.entries(workingMemory)) {
+      if (['trigger_context', 'eval_result', 'delivery_receipt'].includes(key)) continue
+      if (val == null) continue
+      reportData[key.replace(/_/g, ' ')] = typeof val === 'object'
+        ? JSON.stringify(val, null, 2)
+        : String(val)
+    }
+    if (Object.keys(reportData).length > 0) {
+      await supabase.from('reports').insert({
+        run_id: runId,
+        title: `${workflow.definition.name} — ${new Date().toLocaleDateString()}`,
+        content: {
+          report: reportData,
+          eval_result: (workingMemory.eval_result as Record<string, unknown>) ?? null,
+        },
+        format: 'json',
+        created_at: new Date().toISOString(),
+      }).catch(err => console.error('[Orchestrator] Failed to write report:', err))
+    }
   } catch (err) {
     await supabase.from('workflow_runs')
       .update({ status: 'failed', error_message: String(err) })
@@ -86,7 +113,8 @@ async function spawnAgent(
   runId: string,
   workingMemory: Record<string, unknown>,
   channel: ReturnType<typeof supabase.channel>,
-  system_prompt?: string
+  system_prompt?: string,
+  deliveryMeta?: { workflow_name: string; channels: unknown[] }
 ): Promise<Record<string, unknown>> {
   await emit(channel, runId, 'TASK_ASSIGNED', 'orchestrator', { step_id: step.step_id, agent_role: step.agent_role })
 
@@ -96,13 +124,76 @@ async function spawnAgent(
     return runConsensus(step, input, runId, channel, system_prompt)
   }
 
+  if (step.critique_loop) {
+    return runCritiqueLoop(step, input, runId, channel, system_prompt)
+  }
+
+  const extraParams = step.agent_role === 'delivery' && deliveryMeta
+    ? { workflow_name: deliveryMeta.workflow_name, channels: deliveryMeta.channels }
+    : {}
+
   const { data, error } = await supabase.functions.invoke(`agent-${step.agent_role}`, {
-    body: { step, input, run_id: runId, system_prompt },
+    body: { step, input, run_id: runId, system_prompt, ...extraParams },
   })
   if (error) throw new Error(`Agent ${step.agent_role} failed: ${error.message}`)
 
   await emit(channel, runId, 'TASK_COMPLETE', step.agent_role as 'analyst', { step_id: step.step_id })
   return data.outputs
+}
+
+async function runCritiqueLoop(
+  step: WorkflowStep,
+  input: Record<string, unknown>,
+  runId: string,
+  channel: ReturnType<typeof supabase.channel>,
+  system_prompt?: string
+): Promise<Record<string, unknown>> {
+  const { max_rounds = 2, critic_instructions } = step.critique_loop!
+  let currentInput = input
+  let analystOutputs: Record<string, unknown> = {}
+
+  for (let round = 0; round < max_rounds; round++) {
+    // ── Analyst turn ──────────────────────────────────────────────────────
+    const { data: aData, error: aErr } = await supabase.functions.invoke(`agent-${step.agent_role}`, {
+      body: { step, input: currentInput, run_id: runId, system_prompt },
+    })
+    if (aErr) throw new Error(`Agent ${step.agent_role} failed (round ${round + 1}): ${aErr.message}`)
+    analystOutputs = aData.outputs
+
+    // ── Critic turn ───────────────────────────────────────────────────────
+    await emit(channel, runId, 'CRITIQUE_REQUESTED', step.agent_role as 'analyst', {
+      step_id: step.step_id, round, max_rounds,
+    })
+
+    const { data: cData, error: cErr } = await supabase.functions.invoke('agent-critic', {
+      body: { step, analyst_output: analystOutputs, critic_instructions, run_id: runId, round },
+    })
+    if (cErr) {
+      console.error(`[Orchestrator] Critic failed (round ${round + 1}):`, cErr.message)
+      break // Don't block the pipeline on critic failures
+    }
+
+    const critique = cData.outputs.critique as {
+      approved: boolean; confidence: number; feedback: string; issues: string[]
+    }
+
+    if (critique.approved) {
+      await emit(channel, runId, 'CRITIQUE_APPROVED', 'critic', {
+        step_id: step.step_id, round, confidence: critique.confidence,
+      })
+      break
+    }
+
+    await emit(channel, runId, 'CRITIQUE_FEEDBACK', 'critic', {
+      step_id: step.step_id, round, feedback: critique.feedback, issues: critique.issues,
+    })
+
+    // Inject feedback so analyst can revise on next round
+    currentInput = { ...currentInput, critique_feedback: critique.feedback, critique_issues: critique.issues }
+  }
+
+  await emit(channel, runId, 'TASK_COMPLETE', step.agent_role as 'analyst', { step_id: step.step_id })
+  return analystOutputs
 }
 
 async function runConsensus(

@@ -69,7 +69,7 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to create run' }, { status: 500 })
   }
 
-  // 5. Fire-and-forget orchestrator
+  // 5. Fire-and-forget orchestrator (pass run_id so it reuses the record we created)
   const orchestratorUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/orchestrator`
   fetch(orchestratorUrl, {
     method: 'POST',
@@ -77,7 +77,7 @@ export async function POST(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
     },
-    body: JSON.stringify({ workflow_id: workflowId, trigger_context: triggerContext }),
+    body: JSON.stringify({ workflow_id: workflowId, run_id: run.id, trigger_context: triggerContext }),
   }).catch(err => console.error('[webhook] Orchestrator invocation failed:', err))
 
   return NextResponse.json({ run_id: run.id }, { status: 202 })

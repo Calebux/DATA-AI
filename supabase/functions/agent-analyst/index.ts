@@ -58,8 +58,20 @@ Deno.serve(async (req) => {
 })
 
 function buildPrompt(instructions: string, input: Record<string, unknown>): string {
-  const data = Object.entries(input)
+  // Separate critique feedback from regular data inputs
+  const { critique_feedback, critique_issues, ...dataInput } = input
+
+  const data = Object.entries(dataInput)
     .map(([k, v]) => `## ${k}\n\`\`\`json\n${JSON.stringify(v, null, 2)}\n\`\`\``)
     .join('\n\n')
-  return `${instructions}\n\n---\n\n${data}`
+
+  const critiqueSection = critique_feedback
+    ? `\n\n---\n\n## REVISION REQUIRED — Critic Feedback\n${critique_feedback}${
+        Array.isArray(critique_issues) && critique_issues.length > 0
+          ? `\n\nSpecific issues to fix:\n${(critique_issues as string[]).map(i => `- ${i}`).join('\n')}`
+          : ''
+      }\n\nRevise your output to address all the above points.`
+    : ''
+
+  return `${instructions}${critiqueSection}\n\n---\n\n${data}`
 }

@@ -9,6 +9,9 @@ export interface McpServer {
 export type AgentRole =
   | 'data_ingestor'
   | 'analyst'
+  | 'researcher'
+  | 'critic'
+  | 'synthesizer'
   | 'eval'
   | 'delivery'
   | 'orchestrator'
@@ -21,6 +24,7 @@ export type AgentEventType =
   | 'TASK_COMPLETE'
   | 'DATA_READY'
   | 'ANALYSIS_READY'
+  | 'RESEARCH_COMPLETE'
   | 'EVAL_PASS'
   | 'EVAL_FAIL_RETRY'
   | 'DELIVERY_SENT'
@@ -29,6 +33,9 @@ export type AgentEventType =
   | 'CONSENSUS_START'
   | 'CONSENSUS_VOTE'
   | 'CONSENSUS_RESOLVED'
+  | 'CRITIQUE_REQUESTED'
+  | 'CRITIQUE_FEEDBACK'
+  | 'CRITIQUE_APPROVED'
   | 'ESCALATION_REQUESTED'
   | 'HUMAN_APPROVED'
   | 'HUMAN_REJECTED'
@@ -54,7 +61,7 @@ export type TriggerType =
   | 'manual'
 
 export type DataSourceType =
-  | 'api'
+  | 'http'
   | 'web_scrape'
   | 'google_sheets'
   | 'webhook'
@@ -62,10 +69,14 @@ export type DataSourceType =
 
 export interface DataSource {
   type: DataSourceType
-  connector?: string
+  label?: string
   url?: string
+  method?: 'GET' | 'POST' | 'PUT'
+  headers?: Record<string, string>
+  bearer_token?: string
+  body?: string
   spreadsheet_id?: string
-  credentials_key?: string
+  sheet_name?: string
 }
 
 export interface ConsensusConfig {
@@ -86,6 +97,10 @@ export interface WorkflowStep {
   consensus?: ConsensusConfig
   retry_target?: string
   max_retries?: number
+  critique_loop?: {
+    max_rounds: number
+    critic_instructions?: string
+  }
 }
 
 export type DeliveryChannelType =

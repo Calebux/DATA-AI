@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { workflow_id } = await req.json()
+  const { workflow_id, trigger_context: userContext = {} } = await req.json()
   if (!workflow_id) return NextResponse.json({ error: 'workflow_id required' }, { status: 400 })
 
   // Use service-role client for the insert so RLS doesn't block it
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${serviceKey}`,
         },
-        body: JSON.stringify({ workflow_id, run_id: run.id, trigger_context: { source: 'manual', user_id: user.id } }),
+        body: JSON.stringify({ workflow_id, run_id: run.id, trigger_context: { ...userContext, source: 'manual', user_id: user.id } }),
       })
       if (!res.ok) {
         const body = await res.text()

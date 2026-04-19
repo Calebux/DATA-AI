@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import type { AgentEvent } from '@/types'
-import { Network, GitBranch, RotateCcw, Users, Cpu, ShieldCheck } from 'lucide-react'
+import { Network, GitBranch, RotateCcw, Users, Cpu, ShieldCheck, Zap } from 'lucide-react'
 
 interface Props {
   runId: string
@@ -13,6 +13,7 @@ interface Props {
 
 export default function SwarmMetrics({ runId, events: propEvents }: Props) {
   const [fetchedEvents, setFetchedEvents] = useState<AgentEvent[]>([])
+  const [totalTokens, setTotalTokens] = useState(0)
 
   useEffect(() => {
     if (propEvents !== undefined) return
@@ -27,6 +28,14 @@ export default function SwarmMetrics({ runId, events: propEvents }: Props) {
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [runId, propEvents])
+
+  useEffect(() => {
+    const supabase = getSupabase()
+    supabase.from('agent_memory').select('tokens_used').eq('run_id', runId).not('tokens_used', 'is', null)
+      .then(({ data }) => {
+        if (data) setTotalTokens(data.reduce((sum, r) => sum + (r.tokens_used ?? 0), 0))
+      })
+  }, [runId])
 
   const events = propEvents ?? fetchedEvents
 
@@ -56,9 +65,12 @@ export default function SwarmMetrics({ runId, events: propEvents }: Props) {
     return { agentsSpawned: agentsSpawned.size, totalEvents: events.length, consensusRounds, retries, humanInterventions, autonomousDecisions, topAgent: topAgent.replace(/_/g, ' '), topCount }
   }, [events])
 
+  const tokenLabel = totalTokens > 1000 ? `${(totalTokens / 1000).toFixed(1)}k` : String(totalTokens)
+
   const stats = [
     { icon: Cpu,         label: 'Agents Active',    value: metrics.agentsSpawned },
     { icon: Network,     label: 'Events Fired',     value: metrics.totalEvents },
+    { icon: Zap,         label: 'Tokens Used',      value: tokenLabel },
     { icon: Users,       label: 'Consensus Rounds', value: metrics.consensusRounds },
     { icon: RotateCcw,   label: 'Retries',          value: metrics.retries },
     { icon: ShieldCheck, label: 'Auto Decisions',   value: metrics.autonomousDecisions },

@@ -6,7 +6,7 @@ import { Spinner } from '@/components/ui/spinner'
 import type { Workflow, McpServer } from '@/types'
 import {
   X, Check, Save, Bot, ToggleLeft, ToggleRight,
-  Play, Repeat, CalendarDays, Clock, Webhook, Database,
+  Play, Repeat, CalendarDays, Clock, Webhook, Database, RefreshCw,
   type LucideProps,
 } from 'lucide-react'
 import type { FC } from 'react'
@@ -38,6 +38,11 @@ function buildCron(t: TriggerChoice, hour: string, weekday: string): string {
   return ''
 }
 
+function generateWebhookSecret(len = 32): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  return Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+}
+
 /** Parse a cron expression back to (hour, weekday) for the UI */
 function parseCron(expr: string): { hour: string; weekday: string } {
   const parts = expr.split(' ')
@@ -67,10 +72,14 @@ type DrawerTab = 'data' | 'ai' | 'schedule'
 
 interface ConfiguredDataSource {
   type: string
-  connector?: string
+  label?: string
   url?: string
+  method?: string
+  headers?: Record<string, string>
+  bearer_token?: string
+  body?: string
   spreadsheet_id?: string
-  credentials_key?: string
+  sheet_name?: string
   _step_id?: string
 }
 
@@ -110,8 +119,9 @@ export default function WorkflowEditDrawer({ open, workflow, onClose, onSaved }:
   })
 
   // Schedule
-  const [trigger,  setTrigger]  = useState<TriggerChoice>(detectTrigger(workflow))
-  const [timezone, setTimezone] = useState(workflow.definition.trigger.timezone ?? 'America/New_York')
+  const [trigger,       setTrigger]       = useState<TriggerChoice>(detectTrigger(workflow))
+  const [timezone,      setTimezone]      = useState(workflow.definition.trigger.timezone ?? 'America/New_York')
+  const [webhookSecret, setWebhookSecret] = useState(workflow.definition.webhook_secret ?? '')
   const initCron = workflow.definition.trigger.cron_expression
     ? parseCron(workflow.definition.trigger.cron_expression)
     : { hour: '08:00', weekday: 'Monday' }
@@ -139,6 +149,7 @@ export default function WorkflowEditDrawer({ open, workflow, onClose, onSaved }:
       const { hour: h, weekday: wd } = parseCron(workflow.definition.trigger.cron_expression)
       setHour(h); setWeekday(wd)
     }
+    setWebhookSecret(workflow.definition.webhook_secret ?? '')
   }, [workflow.id])// eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleMcp(idx: number) {
@@ -169,6 +180,7 @@ export default function WorkflowEditDrawer({ open, workflow, onClose, onSaved }:
       steps: newSteps,
       system_prompt: systemPrompt || undefined,
       mcp_servers: mcpServers.length > 0 ? mcpServers : undefined,
+      webhook_secret: trigger === 'webhook' && webhookSecret ? webhookSecret : undefined,
       trigger: {
         type: trigger === 'webhook' ? 'webhook' : trigger === 'manual' ? 'manual' : 'cron',
         ...(cronExpr ? { cron_expression: cronExpr, timezone } : {}),
@@ -259,19 +271,37 @@ export default function WorkflowEditDrawer({ open, workflow, onClose, onSaved }:
                           {ds._step_id}
                         </span>
                         <span className="text-sm font-semibold uppercase tracking-wider text-black">
-                          {ds.connector || ds.type.replace('_', ' ')}
+                          {ds.label || ds.type.replace(/_/g, ' ')}
                         </span>
                       </div>
 
-                      {ds.type === 'web_scrape' && (
-                        <div>
-                          <label className="section-label block mb-1.5">Target URL</label>
-                          <input
-                            type="url"
-                            className="w-full border border-black/15 bg-transparent rounded-md px-3 py-2 text-sm focus:border-black/40 outline-none"
-                            value={ds.url || ''}
-                            onChange={e => updateDsConfig(idx, { url: e.target.value })}
-                          />
+                      {(ds.type === 'http' || ds.type === 'web_scrape') && (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="section-label block mb-1.5">
+                              {ds.type === 'web_scrape' ? 'URL to scrape' : 'API endpoint URL'}
+                            </label>
+                            <input
+                              type="url"
+                              className="w-full border border-black/15 bg-transparent px-3 py-2 text-sm focus:border-black/40 outline-none font-mono"
+                              placeholder="https://api.example.com/v1/data"
+                              value={ds.url || ''}
+                              onChange={e => updateDsConfig(idx, { url: e.target.value })}
+                            />
+                          </div>
+                          {ds.type === 'http' && (
+                            <div>
+                              <label className="section-label block mb-1.5">Bearer Token <span className="text-black/30 normal-case font-normal">(optional)</span></label>
+                              <input
+                                type="password"
+                                className="w-full border border-black/15 bg-transparent px-3 py-2 text-sm focus:border-black/40 outline-none font-mono"
+                                placeholder="sk_live_… or Bearer token"
+                                value={ds.bearer_token || ''}
+                                onChange={e => updateDsConfig(idx, { bearer_token: e.target.value })}
+                              />
+                              <p className="text-[10px] text-black/30 mt-1">Sent as <code className="bg-black/5 px-0.5">Authorization: Bearer …</code> header</p>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -280,18 +310,10 @@ export default function WorkflowEditDrawer({ open, workflow, onClose, onSaved }:
                           <label className="section-label block mb-1.5">Spreadsheet ID</label>
                           <input
                             type="text"
-                            className="w-full border border-black/15 bg-black/5 rounded-md px-3 py-2 text-sm font-mono focus:border-black/40 outline-none"
+                            className="w-full border border-black/15 bg-black/5 px-3 py-2 text-sm font-mono focus:border-black/40 outline-none"
                             value={ds.spreadsheet_id || ''}
                             onChange={e => updateDsConfig(idx, { spreadsheet_id: e.target.value })}
                           />
-                        </div>
-                      )}
-
-                      {ds.type === 'api' && (
-                        <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-md">
-                          <p className="text-xs text-yellow-800">
-                            Uses the <strong>{ds.connector}</strong> integration. Manage keys in env.
-                          </p>
                         </div>
                       )}
                     </div>
@@ -419,17 +441,38 @@ export default function WorkflowEditDrawer({ open, workflow, onClose, onSaved }:
               )}
 
               {trigger === 'webhook' && (
-                <div className="border border-black/10 p-5 space-y-2">
-                  <p className="section-label">Webhook URL</p>
-                  <p className="text-xs font-mono text-black/60 break-all">
-                    {typeof window !== 'undefined' ? window.location.origin : ''}/api/webhook/{workflow.id}
-                  </p>
-                  {workflow.definition.webhook_secret && (
-                    <>
-                      <p className="section-label mt-3">Secret</p>
-                      <p className="text-xs font-mono text-black/40">Send as <code className="bg-black/5 px-1">X-Webhook-Secret</code> header</p>
-                    </>
-                  )}
+                <div className="border border-black/10 p-5 space-y-4">
+                  <div>
+                    <p className="section-label mb-1.5">Webhook URL</p>
+                    <p className="text-xs font-mono text-black/60 break-all bg-black/[0.03] border border-black/8 px-3 py-2">
+                      {typeof window !== 'undefined' ? window.location.origin : ''}/api/webhook/{workflow.id}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="section-label block mb-1.5">
+                      Secret Token <span className="text-black/30 normal-case font-normal">(optional)</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        className="flex-1 border border-black/15 bg-transparent px-3 py-2 text-sm font-mono focus:border-black/40 outline-none"
+                        placeholder="Leave blank for no auth"
+                        value={webhookSecret}
+                        onChange={e => setWebhookSecret(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setWebhookSecret(generateWebhookSecret())}
+                        className="px-3 py-2 border border-black/15 text-black/40 hover:text-black hover:border-black/30 transition-colors"
+                        title="Generate random secret"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-black/30 mt-1">
+                      Send as <code className="bg-black/5 px-0.5">X-Webhook-Secret</code> header. Save to persist.
+                    </p>
+                  </div>
                 </div>
               )}
             </>

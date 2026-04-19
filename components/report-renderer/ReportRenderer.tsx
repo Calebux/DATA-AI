@@ -42,15 +42,24 @@ export default function ReportRenderer({ report, title, onExportPdf, onExportXls
 
   const headline = data.headline ?? (report as Record<string, string>)['headline'] ?? (report as Record<string, string>)['HEADLINE']
 
+  if (sections.length === 0 && !headline) {
+    return (
+      <div className="text-center py-10">
+        <p className="text-sm text-black/30">Report is empty</p>
+        <p className="text-xs text-black/20 mt-1">The workflow completed but produced no output sections.</p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-3">
         <div>
-          {title && <p className="text-sm font-medium text-white">{title}</p>}
+          {title && <p className="text-sm font-medium text-black">{title}</p>}
           {score && (
-            <p className="text-xs text-white/40 mt-0.5">
-              Report quality: <span className="text-[rgb(var(--green))]">{score}</span>
+            <p className="text-xs text-black/40 mt-0.5">
+              Report quality: <span className="text-emerald-600 font-medium">{score}</span>
             </p>
           )}
         </div>
@@ -70,35 +79,35 @@ export default function ReportRenderer({ report, title, onExportPdf, onExportXls
 
       {/* Headline */}
       {headline && (
-        <Card className="border-l-4 border-l-[rgb(var(--brand))] bg-[rgb(var(--brand))]/5">
-          <p className="text-xs font-bold text-[rgb(var(--brand))] uppercase tracking-widest mb-1">Headline</p>
-          <p className="text-white font-medium leading-relaxed">{headline}</p>
-        </Card>
+        <div className="border-l-4 border-l-black px-4 py-3 bg-black/[0.02]">
+          <p className="text-[10px] font-bold text-black/40 uppercase tracking-widest mb-1">Headline</p>
+          <p className="text-black font-semibold leading-relaxed">{headline}</p>
+        </div>
       )}
 
       {/* Sections */}
       {sections.map((section, i) => (
-        <Card key={i}>
-          <p className="text-xs font-bold text-white/40 uppercase tracking-widest mb-2">{section.title}</p>
-          <div className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap">
+        <div key={i} className="border border-black/8 rounded-xl p-4">
+          <p className="text-[10px] font-bold text-black/35 uppercase tracking-widest mb-2">{section.title}</p>
+          <div className="text-sm text-black/70 leading-relaxed whitespace-pre-wrap">
             {section.content}
           </div>
-        </Card>
+        </div>
       ))}
 
       {/* Eval scores */}
       {evalResult?.scores && (
-        <Card className="bg-white/3">
-          <p className="text-xs font-bold text-white/40 uppercase tracking-widest mb-3">Quality Scores</p>
+        <div className="border border-black/8 rounded-xl p-4 bg-black/[0.01]">
+          <p className="text-[10px] font-bold text-black/35 uppercase tracking-widest mb-3">Quality Scores</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {Object.entries(evalResult.scores).map(([key, val]) => (
               <div key={key} className="text-center">
-                <p className="text-lg font-bold text-white">{(val * 10).toFixed(1)}</p>
-                <p className="text-xs text-white/40 capitalize">{key}</p>
+                <p className="text-lg font-bold text-black">{(val * 10).toFixed(1)}</p>
+                <p className="text-xs text-black/40 capitalize">{key}</p>
               </div>
             ))}
           </div>
-        </Card>
+        </div>
       )}
     </div>
   )

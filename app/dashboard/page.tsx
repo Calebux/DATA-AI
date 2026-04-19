@@ -36,6 +36,13 @@ const STATUS_DOT: Record<string, string> = {
   paused:  'bg-black/15',
 }
 
+function hasUnconfiguredSources(wf: Workflow): boolean {
+  return wf.definition.steps.some(s =>
+    s.agent_role === 'data_ingestor' &&
+    s.data_sources?.some(ds => !ds.url && (ds.type === 'http' || ds.type === 'web_scrape'))
+  )
+}
+
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -163,6 +170,13 @@ export default function DashboardPage() {
                   </div>
                   <span className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${dotCls}`} />
                 </div>
+
+                {/* Setup required badge */}
+                {hasUnconfiguredSources(wf) && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded-md -mt-1 w-fit">
+                    ⚠ Setup required
+                  </span>
+                )}
 
                 {/* Description */}
                 {wf.description && (
