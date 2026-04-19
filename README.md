@@ -26,11 +26,14 @@ Browser (Next.js)
     ├── Builds task graph (phases from depends_on DAG)
     ├── Runs phases in parallel with Promise.allSettled
     └── Invokes per-step edge functions:
-         ├── agent-data-ingestor   Fetches APIs, web scrapes, Google Sheets
-         ├── agent-analyst         GPT-4o reasoning → structured JSON
-         ├── agent-eval            GPT-4o quality scoring with auto-retry
+         ├── agent-data-ingestor   Fetches APIs, web scrapes, CSV, Google Sheets
+         ├── agent-researcher      Claude-powered web research + context enrichment
+         ├── agent-analyst         Claude reasoning → structured JSON report
+         ├── agent-critic          A2A critique loop — reviews analyst output
+         ├── agent-eval            Quality scoring with auto-retry (score < 0.75 → revise)
          ├── agent-escalator       Pauses run, awaits human Approve/Reject
-         └── agent-delivery        Email (Resend), webhook, Telegram, report storage
+         ├── agent-delivery        Webhook, Telegram, report storage
+         └── cron-runner           Fires scheduled workflows via cron expressions
               │
               ▼
    Supabase Postgres + Realtime
@@ -49,11 +52,13 @@ The frontend subscribes to `agent_events` via Supabase Realtime to stream the li
 
 | Role | Function |
 |---|---|
-| `data_ingestor` | Pulls raw data from external sources (Stripe, HubSpot, web scrape, Google Sheets). No LLM call — pure HTTP. |
-| `analyst` | Sends data + instructions to GPT-4o with `response_format: json_object`. Validates output keys. Stores to `agent_memory`. |
-| `eval` | Scores the analyst's report (completeness, specificity, actionability, tone). If score < 0.75, reinvokes the analyst with feedback. Retries up to `max_retries` times. Updates `quality_score` on the run. |
+| `data_ingestor` | Pulls raw data from external sources (APIs, web scrape, Google Sheets, CSV). No LLM call — pure HTTP. |
+| `researcher` | Uses Claude to search the web, synthesise background context, and enrich the raw data before analysis. |
+| `analyst` | Sends enriched data + instructions to Claude with structured JSON output. Validates output keys. Stores to `agent_memory`. |
+| `critic` | Reviews the analyst's output, scores reasoning quality, and returns structured feedback. Drives the A2A critique loop. |
+| `eval` | Scores the final report (completeness, specificity, actionability, tone). If score < 0.75, reinvokes the analyst with feedback. Retries up to `max_retries` times. Updates `quality_score` on the run. |
 | `escalator` | Emits `ESCALATION_REQUESTED` event and long-polls (90s) for a `HUMAN_APPROVED` or `HUMAN_REJECTED` event from the Inbox UI. |
-| `delivery` | Dispatches output via email (Resend), outbound webhook, Telegram bot, or Supabase Storage. Writes to `reports` table. |
+| `delivery` | Dispatches output via outbound webhook, Telegram bot, or Supabase Storage. Writes to `reports` table. |
 
 ### Consensus mode
 
@@ -164,17 +169,16 @@ Steps with no `depends_on` are in phase 0. Steps whose dependencies are all sati
 
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 16 (App Router) |
+| Framework | Next.js 14 (App Router) |
 | Language | TypeScript (strict) |
-| Styling | Tailwind CSS v4, Apple-inspired design system |
+| Styling | Tailwind CSS, Apple-inspired design system |
 | UI primitives | Radix UI (dialogs, tabs, select, switch, tooltip) |
 | Charts | Recharts |
 | Auth | Supabase Auth (email/password) + `@supabase/ssr` |
 | Database | Supabase Postgres |
 | Realtime | Supabase Realtime (broadcast + postgres_changes) |
 | Edge functions | Supabase Edge Functions (Deno) |
-| LLM | OpenAI GPT-4o (via `openai` in edge functions) |
-| Email | Resend API |
+| LLM | Anthropic Claude (claude-sonnet-4-6 via `@anthropic-ai/sdk`) |
 | Export | jsPDF, xlsx |
 
 ---
@@ -280,24 +284,26 @@ Or run the SQL from `supabase/migrations/` directly in your project's SQL editor
 
 ```bash
 supabase functions deploy orchestrator
-supabase functions deploy agent-analyst
 supabase functions deploy agent-data-ingestor
+supabase functions deploy agent-researcher
+supabase functions deploy agent-analyst
+supabase functions deploy agent-critic
 supabase functions deploy agent-eval
-supabase functions deploy agent-delivery
 supabase functions deploy agent-escalator
+supabase functions deploy agent-delivery
+supabase functions deploy cron-runner
 ```
 
 Set the required secrets:
 
 ```bash
-supabase secrets set OPENAI_API_KEY=sk-...
-supabase secrets set RESEND_API_KEY=re_...
+supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 
 # Only needed for templates that use these connectors:
 supabase secrets set STRIPE_SECRET_KEY=sk_live_...
 supabase secrets set HUBSPOT_ACCESS_TOKEN=pat-...
 supabase secrets set TELEGRAM_BOT_TOKEN=...
-supabase secrets set GOOGLE_ACCESS_TOKEN=...
+supabase secrets set RESEND_API_KEY=re_...
 ```
 
 ### 5. Start the dev server
@@ -418,11 +424,14 @@ components/
 
 supabase/functions/
   orchestrator/           Coordinator — builds DAG, fans out steps
-  agent-analyst/          GPT-4o reasoning agent
-  agent-data-ingestor/    External data fetcher
+  agent-data-ingestor/    External data fetcher (API, CSV, scrape, sheets)
+  agent-researcher/       Claude-powered web research + enrichment
+  agent-analyst/          Claude reasoning agent → structured JSON
+  agent-critic/           A2A critique — reviews and scores analyst output
   agent-eval/             Quality scoring + retry loop
-  agent-delivery/         Email, webhook, Telegram, storage
   agent-escalator/        Human approval gate
+  agent-delivery/         Webhook, Telegram, report storage
+  cron-runner/            Scheduled workflow trigger
   _shared/types.ts        Shared TypeScript interfaces
 
 data/workflows/index.ts   Built-in workflow templates
