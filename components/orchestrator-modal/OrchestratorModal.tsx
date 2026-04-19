@@ -29,7 +29,11 @@ export default function OrchestratorModal({ open, onClose, workflow, onRunStarte
   // Detect steps that need URL configuration
   const unconfigured = steps.filter(s =>
     s.agent_role === 'data_ingestor' &&
-    s.data_sources?.some(ds => !ds.url && (ds.type === 'http' || ds.type === 'web_scrape'))
+    s.data_sources?.some(ds =>
+      (ds.type === 'http' || ds.type === 'web_scrape') ? !ds.url :
+      ds.type === 'google_sheets' ? !ds.spreadsheet_id :
+      false
+    )
   )
 
   function handleContextChange(val: string) {
