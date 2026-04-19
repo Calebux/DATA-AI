@@ -104,8 +104,17 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 // ── Types for Data Source Config ───────────────────────────────────────────
 
+type DsUiMode = 'api' | 'sheets' | 'csv'
+
 interface ConfiguredDataSource extends DataSource {
   _step_id?: string // Track which step this source belongs to
+  _ui_mode?: DsUiMode // UI-only: which input mode the user chose
+}
+
+function extractSheetId(input: string): string {
+  // Accept full Google Sheets URL or raw ID
+  const m = input.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/)
+  return m ? m[1] : input
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -429,62 +438,125 @@ export default function NewWorkflowPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {dsConfig.map((ds, idx) => (
-                  <div key={idx} className="bg-white border border-black/10 rounded-xl p-5 shadow-sm">
-                    <div className="flex items-center gap-2 mb-4">
-                      <Badge variant="muted" className="bg-black/5 border-black/10 text-black/60 font-mono">
-                        {ds._step_id}
-                      </Badge>
-                      <span className="text-sm font-semibold uppercase tracking-wider text-black">
-                        {ds.label || ds.type.replace(/_/g, ' ')}
-                      </span>
-                    </div>
+                {dsConfig.map((ds, idx) => {
+                  // Derive current UI mode from stored state or type
+                  const uiMode: DsUiMode = ds._ui_mode ?? (ds.type === 'google_sheets' ? 'sheets' : 'api')
 
-                    {(ds.type === 'http' || ds.type === 'web_scrape') && (
-                      <div className="space-y-3">
-                        <div>
-                          <label className="text-xs font-semibold uppercase tracking-wider text-black/50 mb-1.5 block">
-                            {ds.type === 'web_scrape' ? 'URL to Scrape' : 'API Endpoint URL'}
-                          </label>
-                          <input
-                            type="url"
-                            placeholder="https://api.example.com/v1/data"
-                            className="w-full border border-black/15 rounded-md px-3 py-2 text-sm focus:border-black/40 outline-none font-mono"
-                            value={ds.url || ''}
-                            onChange={e => updateDsConfig(idx, { url: e.target.value })}
-                          />
-                        </div>
-                        {ds.type === 'http' && (
+                  const switchMode = (mode: DsUiMode) => {
+                    if (mode === 'sheets') updateDsConfig(idx, { _ui_mode: 'sheets', type: 'google_sheets', url: undefined, bearer_token: undefined })
+                    else if (mode === 'csv') updateDsConfig(idx, { _ui_mode: 'csv', type: 'http', spreadsheet_id: undefined, bearer_token: undefined })
+                    else updateDsConfig(idx, { _ui_mode: 'api', type: 'http', spreadsheet_id: undefined })
+                  }
+
+                  const modeBtns: { id: DsUiMode; label: string; icon: FC<LucideProps> }[] = [
+                    { id: 'api',    label: 'REST API',      icon: Database },
+                    { id: 'sheets', label: 'Google Sheets', icon: FileSpreadsheet },
+                    { id: 'csv',    label: 'CSV Link',      icon: Globe },
+                  ]
+
+                  return (
+                    <div key={idx} className="bg-white border border-black/10 rounded-xl p-5 shadow-sm">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Badge variant="muted" className="bg-black/5 border-black/10 text-black/60 font-mono">
+                          {ds._step_id}
+                        </Badge>
+                        <span className="text-sm font-semibold uppercase tracking-wider text-black">
+                          {ds.label || ds.type.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+
+                      {/* Source type switcher */}
+                      <div className="grid grid-cols-3 gap-2 mb-5">
+                        {modeBtns.map(btn => {
+                          const active = uiMode === btn.id
+                          const Icon = btn.icon
+                          return (
+                            <button key={btn.id} onClick={() => switchMode(btn.id)}
+                              className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
+                                active ? 'border-black bg-black text-white' : 'border-black/10 text-black/50 hover:border-black/30 hover:text-black'
+                              }`}>
+                              <Icon className="h-3.5 w-3.5" />
+                              {btn.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+
+                      {/* REST API fields */}
+                      {uiMode === 'api' && (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="text-xs font-semibold uppercase tracking-wider text-black/50 mb-1.5 block">API Endpoint URL</label>
+                            <input
+                              type="url"
+                              placeholder="https://api.example.com/v1/revenue"
+                              className="w-full border border-black/15 rounded-md px-3 py-2 text-sm focus:border-black/40 outline-none font-mono"
+                              value={ds.url || ''}
+                              onChange={e => updateDsConfig(idx, { url: e.target.value })}
+                            />
+                          </div>
                           <div>
                             <label className="text-xs font-semibold uppercase tracking-wider text-black/50 mb-1.5 block">
-                              Bearer Token <span className="normal-case font-normal text-black/30">(optional)</span>
+                              API Key / Bearer Token <span className="normal-case font-normal text-black/30">(optional)</span>
                             </label>
                             <input
                               type="password"
-                              placeholder="sk_live_… or API key"
+                              placeholder="Leave blank if the endpoint is public"
                               className="w-full border border-black/15 rounded-md px-3 py-2 text-sm focus:border-black/40 outline-none font-mono"
                               value={ds.bearer_token || ''}
                               onChange={e => updateDsConfig(idx, { bearer_token: e.target.value })}
                             />
-                            <p className="text-[10px] text-black/30 mt-1">Sent as <code className="bg-black/5 px-0.5">Authorization: Bearer …</code></p>
+                            <p className="text-[10px] text-black/30 mt-1">Only needed if your API requires authentication.</p>
                           </div>
-                        )}
-                      </div>
-                    )}
+                        </div>
+                      )}
 
-                    {ds.type === 'google_sheets' && (
-                      <div>
-                        <label className="text-xs font-semibold uppercase tracking-wider text-black/50 mb-1.5 block">Spreadsheet ID</label>
-                        <input
-                          type="text"
-                          className="w-full border border-black/15 font-mono rounded-md px-3 py-2 text-sm focus:border-black/40 outline-none bg-black/5"
-                          value={ds.spreadsheet_id || ''}
-                          onChange={e => updateDsConfig(idx, { spreadsheet_id: e.target.value })}
-                        />
-                      </div>
-                    )}
-                  </div>
-                ))}
+                      {/* Google Sheets fields */}
+                      {uiMode === 'sheets' && (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="text-xs font-semibold uppercase tracking-wider text-black/50 mb-1.5 block">Google Sheet URL or ID</label>
+                            <input
+                              type="text"
+                              placeholder="Paste the full Google Sheets link here"
+                              className="w-full border border-black/15 rounded-md px-3 py-2 text-sm focus:border-black/40 outline-none"
+                              value={ds.spreadsheet_id || ''}
+                              onChange={e => updateDsConfig(idx, { spreadsheet_id: extractSheetId(e.target.value) })}
+                            />
+                            <p className="text-[10px] text-black/30 mt-1">Paste the full share link — we'll extract the ID automatically. Sheet must be shared with "Anyone with link".</p>
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold uppercase tracking-wider text-black/50 mb-1.5 block">
+                              Sheet / Tab Name <span className="normal-case font-normal text-black/30">(optional, defaults to Sheet1)</span>
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="Sheet1"
+                              className="w-full border border-black/15 rounded-md px-3 py-2 text-sm focus:border-black/40 outline-none font-mono"
+                              value={ds.sheet_name || ''}
+                              onChange={e => updateDsConfig(idx, { sheet_name: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* CSV Link fields */}
+                      {uiMode === 'csv' && (
+                        <div>
+                          <label className="text-xs font-semibold uppercase tracking-wider text-black/50 mb-1.5 block">CSV File URL</label>
+                          <input
+                            type="url"
+                            placeholder="https://example.com/data/revenue.csv"
+                            className="w-full border border-black/15 rounded-md px-3 py-2 text-sm focus:border-black/40 outline-none font-mono"
+                            value={ds.url || ''}
+                            onChange={e => updateDsConfig(idx, { url: e.target.value })}
+                          />
+                          <p className="text-[10px] text-black/30 mt-1">Paste a direct link to any publicly accessible .csv file.</p>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
 
