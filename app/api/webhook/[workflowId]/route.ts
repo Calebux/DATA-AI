@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// Service-role client: no user session required — external callers don't have browser cookies.
-const adminSupabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+export const dynamic = 'force-dynamic'
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ workflowId: string }> }
 ) {
   const { workflowId } = await params
+
+  // Service-role client — created per-request so env vars are available at runtime
+  const adminSupabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
 
   // 1. Load the workflow
   const { data: workflow, error: wfError } = await adminSupabase
@@ -67,7 +69,7 @@ export async function POST(
     return NextResponse.json({ error: 'Failed to create run' }, { status: 500 })
   }
 
-  // 5. Fire-and-forget orchestrator
+  // 5. Fire-and-forget orchestrator (pass run_id so it reuses the record we created)
   const orchestratorUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/orchestrator`
   fetch(orchestratorUrl, {
     method: 'POST',
@@ -75,7 +77,7 @@ export async function POST(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
     },
-    body: JSON.stringify({ workflow_id: workflowId, trigger_context: triggerContext }),
+    body: JSON.stringify({ workflow_id: workflowId, run_id: run.id, trigger_context: triggerContext }),
   }).catch(err => console.error('[webhook] Orchestrator invocation failed:', err))
 
   return NextResponse.json({ run_id: run.id }, { status: 202 })

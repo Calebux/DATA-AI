@@ -8,7 +8,7 @@ Deno.serve(async (req) => {
     step: WorkflowStep; input: Record<string, unknown>; run_id: string; workflow_name: string; channels: DeliveryChannel[]
   } = await req.json()
 
-  const report = input.synthesized_report as Record<string, string>
+  const report = extractReport(input)
   const evalResult = input.eval_result as EvalResult
   const results: Record<string, unknown>[] = []
 
@@ -32,6 +32,21 @@ Deno.serve(async (req) => {
   const receipt = { delivered_at: new Date().toISOString(), results }
   return new Response(JSON.stringify({ outputs: { delivery_receipt: receipt } }), { headers: { 'Content-Type': 'application/json' } })
 })
+
+function extractReport(input: Record<string, unknown>): Record<string, string> {
+  // Prefer synthesized_report if present (explicit synthesis step)
+  if (input.synthesized_report && typeof input.synthesized_report === 'object') {
+    return input.synthesized_report as Record<string, string>
+  }
+  // Fall back: flatten all non-eval, non-receipt inputs into readable sections
+  const r: Record<string, string> = {}
+  for (const [k, v] of Object.entries(input)) {
+    if (k === 'eval_result' || k === 'delivery_receipt') continue
+    if (v == null) continue
+    r[k] = typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v)
+  }
+  return r
+}
 
 async function deliver(channel: DeliveryChannel, report: Record<string, string>, evalResult: EvalResult, name: string): Promise<unknown> {
   if (channel.type === 'email') return sendEmail(channel, report, evalResult, name)
@@ -57,7 +72,7 @@ async function sendEmail(channel: Extract<DeliveryChannel, { type: 'email' }>, r
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: 'DATA-AI <reports@data-ai.xyz>', to: channel.to, subject, html }),
+    body: JSON.stringify({ from: 'DATA-AI <onboarding@resend.dev>', to: channel.to, subject, html }),
   })
   if (!res.ok) throw new Error(`Resend failed: ${await res.text()}`)
   return res.json()

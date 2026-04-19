@@ -7,38 +7,40 @@ import Link from 'next/link'
 
 const FEATURED = [
   {
-    num: '01', category: 'FINANCE',
-    title: 'WEEKLY SAAS INTELLIGENCE',
-    desc: 'Stripe + HubSpot → 3-agent churn consensus → CEO briefing by 8AM Monday.',
+    num: '01', category: 'RESEARCH',
+    title: 'DEEP MARKET RESEARCH',
+    desc: 'Web researcher → critic loop (×2 rounds) → polished intelligence brief, fully sourced.',
   },
   {
-    num: '02', category: 'CUSTOMER SUCCESS',
-    title: 'CHURN RISK MONITOR',
-    desc: 'Daily CRM scan surfaces at-risk accounts before they cancel.',
-  },
-  {
-    num: '03', category: 'OPERATIONS',
+    num: '02', category: 'OPERATIONS',
     title: 'INFRA ALERT MONITOR',
-    desc: 'Webhook alerts → triage consensus → human escalation for P1/P2.',
+    desc: 'Webhook alerts → 3-agent triage consensus → human escalation for P1/P2.',
+  },
+  {
+    num: '03', category: 'COMPETITIVE',
+    title: 'COMPETITOR INTELLIGENCE',
+    desc: 'Parallel web research on rivals → analyst synthesis → weekly briefing every Monday.',
   },
 ]
 
 const EXECUTION_LOG = [
-  { time: 'T+00:02', cls: 'text-black/50',  msg: '3 agents spawned in parallel → Stripe · HubSpot · Web Scrape' },
-  { time: 'T+01:02', cls: 'text-green-700', msg: '✓ All data ingested — Phase 2 begins' },
-  { time: 'T+01:04', cls: 'text-black/50',  msg: '3 analysts running → Revenue · Churn (×3 consensus) · Competitive' },
-  { time: 'T+02:55', cls: 'text-green-700', msg: '✓ Consensus resolved — Agent 2 wins (confidence: 0.91)' },
-  { time: 'T+03:41', cls: 'text-yellow-700', msg: '⚠ Eval failed — specificity too low. Retry with feedback...' },
-  { time: 'T+04:10', cls: 'text-green-700', msg: '✓ Eval passed — 9.2/10. Email sent to CEO & COO' },
+  { time: 'T+00:02', cls: 'text-black/50',   msg: 'Researcher spawned → generating 3 Exa search queries via Claude Haiku' },
+  { time: 'T+00:18', cls: 'text-black/50',   msg: '8 sources fetched and deduplicated — synthesis beginning' },
+  { time: 'T+01:04', cls: 'text-green-700',  msg: '✓ Research complete — passing to analyst' },
+  { time: 'T+01:06', cls: 'text-black/50',   msg: 'Analyst draft → Critic review (round 1/2)' },
+  { time: 'T+01:55', cls: 'text-yellow-700', msg: '⚠ Critic: specificity too low on competitive section. Revising...' },
+  { time: 'T+02:40', cls: 'text-green-700',  msg: '✓ Critic approved round 2 (confidence: 0.94) — Eval: 9.2/10' },
 ]
 
 const CAPABILITIES = [
   { label: 'SWARM EXECUTION',   desc: 'Multiple agents run in parallel across phases. No single-agent bottlenecks.' },
+  { label: 'WEB RESEARCH',      desc: 'Researcher agents search the web via Exa, synthesize findings, and cite sources.' },
+  { label: 'CRITIC LOOP',       desc: 'Analyst and critic agents iterate until output meets the quality bar you set.' },
   { label: 'CONSENSUS VOTING',  desc: 'Run 3 agents on the same task. Reconcile by highest confidence or majority.' },
   { label: 'SELF-CORRECTING',   desc: 'Eval agent scores every output. Failures trigger automatic retries with feedback.' },
-  { label: 'HUMAN ESCALATION',  desc: 'Critical decisions can be paused and routed to a human before proceeding.' },
+  { label: 'HUMAN ESCALATION',  desc: 'Critical decisions pause and route to your Inbox before proceeding.' },
   { label: 'FULL AUDIT TRAIL',  desc: 'Every agent decision, vote, and retry is logged and replayable step by step.' },
-  { label: 'ZERO BABYSITTING',  desc: 'Trigger on cron, webhook, or spreadsheet. Runs end-to-end without intervention.' },
+  { label: 'ZERO BABYSITTING',  desc: 'Trigger on cron or webhook. Runs end-to-end without intervention.' },
 ]
 
 export default function HomePage() {
@@ -94,16 +96,16 @@ export default function HomePage() {
             <p className="text-xs text-black/35 mt-1">faster execution</p>
           </div>
           <div>
-            <p className="section-label mb-2">Swarm Size</p>
-            <div className="text-4xl font-extrabold text-black">6</div>
-            <p className="text-xs text-black/35 mt-1">agents per workflow</p>
+            <p className="section-label mb-2">Agent Types</p>
+            <div className="text-4xl font-extrabold text-black">8</div>
+            <p className="text-xs text-black/35 mt-1">researcher · analyst · critic · eval · delivery + more</p>
           </div>
         </div>
       </div>
 
       {/* Execution log */}
       <div className="mb-16">
-        <p className="section-label mb-4">Live Execution — Weekly SaaS Intelligence Report</p>
+        <p className="section-label mb-4">Live Execution — Deep Market Research Workflow</p>
         <div className="border border-black/10 bg-[#f8f8f8] p-5 font-mono text-xs space-y-2">
           {EXECUTION_LOG.map(({ time, cls, msg }) => (
             <div key={time} className="flex gap-6">

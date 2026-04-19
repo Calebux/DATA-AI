@@ -8,15 +8,12 @@ Deno.serve(async (req) => {
   const outputs: Record<string, unknown> = {}
 
   for (const source of (step.data_sources ?? [])) {
+    const idx = (step.data_sources ?? []).indexOf(source)
+    const key = step.output_keys[idx] ?? `source_${idx}`
     try {
-      const data = await fetchSource(source)
-      const idx = (step.data_sources ?? []).indexOf(source)
-      const key = step.output_keys[idx] ?? `source_${idx}`
-      outputs[key] = data
+      outputs[key] = await fetchSource(source)
     } catch (err) {
-      const idx = (step.data_sources ?? []).indexOf(source)
-      const key = step.output_keys[idx] ?? `source_error_${idx}`
-      outputs[key] = { error: String(err) }
+      outputs[key] = { error: String(err), source_type: source.type, url: source.url }
     }
   }
 
@@ -35,66 +32,43 @@ Deno.serve(async (req) => {
 
 async function fetchSource(source: DataSource): Promise<unknown> {
   switch (source.type) {
-    case 'api': return fetchApi(source)
+    case 'http':      return fetchHttp(source)
     case 'web_scrape': return fetchScrape(source)
     case 'google_sheets': return fetchSheets(source)
     default: throw new Error(`Unsupported source type: ${source.type}`)
   }
 }
 
-async function fetchApi(source: DataSource): Promise<unknown> {
-  switch (source.connector?.toLowerCase()) {
-    case 'stripe': return fetchStripe()
-    case 'hubspot': return fetchHubSpot()
-    default: throw new Error(`Unknown connector: ${source.connector}`)
+async function fetchHttp(source: DataSource): Promise<unknown> {
+  if (!source.url) {
+    throw new Error('Data source URL is not configured. Open the workflow editor → Data Sources tab and enter the API URL.')
   }
-}
 
-async function fetchStripe(): Promise<unknown> {
-  const key = Deno.env.get('STRIPE_SECRET_KEY')!
-  const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 86400
+  const headers: Record<string, string> = { ...(source.headers ?? {}), Accept: 'application/json' }
+  if (source.bearer_token) headers['Authorization'] = `Bearer ${source.bearer_token}`
 
-  const [subs, charges] = await Promise.all([
-    stripeGet(key, `/v1/subscriptions?status=active&limit=100`),
-    stripeGet(key, `/v1/charges?created[gte]=${sevenDaysAgo}&limit=100`),
-  ])
+  const init: RequestInit = { method: source.method ?? 'GET', headers }
+  if (source.body && (source.method === 'POST' || source.method === 'PUT')) {
+    init.body = source.body
+    headers['Content-Type'] = 'application/json'
+  }
 
-  const activeSubs = (subs as { data: { items?: { data?: { price?: { unit_amount?: number; recurring?: { interval: string } } }[] }; }[] }).data ?? []
-  const mrr = activeSubs.reduce((sum, sub) => {
-    const amount = sub.items?.data?.[0]?.price?.unit_amount ?? 0
-    const interval = sub.items?.data?.[0]?.price?.recurring?.interval
-    return sum + (interval === 'year' ? amount / 12 : amount) / 100
-  }, 0)
+  const res = await fetch(source.url, init)
+  if (!res.ok) throw new Error(`HTTP ${source.method ?? 'GET'} ${source.url} → ${res.status} ${res.statusText}`)
 
-  return { mrr_current: Math.round(mrr), recent_charges: (charges as { data: unknown[] }).data ?? [], fetched_at: new Date().toISOString() }
-}
+  const ct = res.headers.get('content-type') ?? ''
+  if (ct.includes('application/json')) return res.json()
 
-async function stripeGet(key: string, path: string): Promise<unknown> {
-  const res = await fetch(`https://api.stripe.com${path}`, { headers: { Authorization: `Bearer ${key}` } })
-  if (!res.ok) throw new Error(`Stripe ${path}: ${res.status}`)
-  return res.json()
-}
-
-async function fetchHubSpot(): Promise<unknown> {
-  const token = Deno.env.get('HUBSPOT_ACCESS_TOKEN')!
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-  const inactive = new Date(Date.now() - 21 * 86400000).getTime().toString()
-
-  const res = await fetch('https://api.hubapi.com/crm/v3/objects/contacts/search', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      filterGroups: [{ filters: [{ propertyName: 'lastmodifieddate', operator: 'LT', value: inactive }] }],
-      properties: ['email', 'firstname', 'lastname', 'company', 'lastmodifieddate'],
-      limit: 50,
-    }),
-  })
-  const contacts = await res.json()
-  return { inactive_contacts: contacts.results ?? [], fetched_at: new Date().toISOString() }
+  const text = await res.text()
+  // Detect CSV by URL extension or content-type
+  if (ct.includes('text/csv') || source.url.endsWith('.csv') || source.url.includes('.csv?')) {
+    return { raw_csv: text, url: source.url, fetched_at: new Date().toISOString() }
+  }
+  return { text: text.slice(0, 20000), url: source.url, fetched_at: new Date().toISOString() }
 }
 
 async function fetchScrape(source: DataSource): Promise<unknown> {
-  if (!source.url) throw new Error('web_scrape requires url')
+  if (!source.url) throw new Error('web_scrape requires a URL. Configure it in the Data Sources tab.')
   const res = await fetch(source.url, { headers: { 'User-Agent': 'DATA-AI/1.0' } })
   if (!res.ok) throw new Error(`Scrape ${source.url}: ${res.status}`)
   const html = await res.text()
@@ -110,7 +84,8 @@ async function fetchScrape(source: DataSource): Promise<unknown> {
 
 async function fetchSheets(source: DataSource): Promise<unknown> {
   if (!source.spreadsheet_id) throw new Error('google_sheets requires spreadsheet_id')
-  const token = Deno.env.get('GOOGLE_ACCESS_TOKEN')!
+  const token = Deno.env.get('GOOGLE_ACCESS_TOKEN')
+  if (!token) throw new Error('GOOGLE_ACCESS_TOKEN not configured')
   const range = `${source.sheet_name ?? 'Sheet1'}!A1:Z1000`
   const res = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${source.spreadsheet_id}/values/${encodeURIComponent(range)}`,

@@ -1,6 +1,9 @@
 export type AgentRole =
   | 'data_ingestor'
   | 'analyst'
+  | 'researcher'
+  | 'critic'
+  | 'synthesizer'
   | 'eval'
   | 'delivery'
   | 'orchestrator'
@@ -13,6 +16,7 @@ export type AgentEventType =
   | 'TASK_COMPLETE'
   | 'DATA_READY'
   | 'ANALYSIS_READY'
+  | 'RESEARCH_COMPLETE'
   | 'EVAL_PASS'
   | 'EVAL_FAIL_RETRY'
   | 'DELIVERY_SENT'
@@ -21,31 +25,37 @@ export type AgentEventType =
   | 'CONSENSUS_START'
   | 'CONSENSUS_VOTE'
   | 'CONSENSUS_RESOLVED'
+  | 'CRITIQUE_REQUESTED'
+  | 'CRITIQUE_FEEDBACK'
+  | 'CRITIQUE_APPROVED'
   | 'ESCALATION_REQUESTED'
   | 'HUMAN_APPROVED'
   | 'HUMAN_REJECTED'
 
 export interface AgentEvent {
-  event_id: string
-  workflow_run_id: string
+  id: string
+  run_id: string
   event_type: AgentEventType
   source_agent: AgentRole
   target_agent?: AgentRole
   step_id?: string
   payload: Record<string, unknown>
-  timestamp: string
+  created_at: string
   correlation_id?: string
 }
 
-export type DataSourceType = 'api' | 'web_scrape' | 'google_sheets' | 'webhook' | 'file'
+export type DataSourceType = 'http' | 'web_scrape' | 'google_sheets' | 'webhook' | 'file'
 
 export interface DataSource {
   type: DataSourceType
-  connector?: string
+  label?: string          // human-readable name shown in UI
   url?: string
+  method?: 'GET' | 'POST' | 'PUT'
+  headers?: Record<string, string>
+  bearer_token?: string
+  body?: string           // JSON body for POST requests
   spreadsheet_id?: string
   sheet_name?: string
-  credentials_key?: string
 }
 
 export interface ConsensusConfig {
@@ -66,6 +76,10 @@ export interface WorkflowStep {
   consensus?: ConsensusConfig
   retry_target?: string
   max_retries?: number
+  critique_loop?: {
+    max_rounds: number
+    critic_instructions?: string
+  }
 }
 
 export type DeliveryChannel =

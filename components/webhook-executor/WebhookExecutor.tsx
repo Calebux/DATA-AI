@@ -9,6 +9,7 @@ import { Copy, Check, RefreshCw } from 'lucide-react'
 
 interface WebhookExecutorProps {
   workflowId: string
+  webhookSecret?: string
   onSave?: (config: WebhookConfig) => void
 }
 
@@ -18,10 +19,10 @@ export interface WebhookConfig {
   events: string[]
 }
 
-export default function WebhookExecutor({ workflowId, onSave }: WebhookExecutorProps) {
+export default function WebhookExecutor({ workflowId, webhookSecret, onSave }: WebhookExecutorProps) {
   const [origin, setOrigin] = useState('')
   const webhookUrl = `${origin}/api/webhook/${workflowId}`
-  const [secret] = useState(() => generateSecret())
+  const [secret] = useState(() => webhookSecret ?? generateSecret())
   const [copied, setCopied] = useState<'url' | 'secret' | null>(null)
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
 

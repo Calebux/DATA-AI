@@ -40,6 +40,35 @@ export default function WorkflowDetailPage() {
   const [showEditDrawer, setShowEditDrawer] = useState(false)
   const [report, setReport] = useState<Report | null>(null)
 
+  function exportReportPdf() {
+    if (!report) return
+    const content = report.content as Record<string, unknown>
+    const sections = content.report as Record<string, string> | undefined
+    if (!sections) return
+    const html = Object.entries(sections)
+      .map(([k, v]) => `<h2 style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;margin-top:1.5rem">${k.replace(/_/g,' ')}</h2><p style="white-space:pre-wrap;line-height:1.7">${v}</p>`)
+      .join('')
+    const w = window.open('', '_blank')
+    if (!w) return
+    w.document.write(`<!DOCTYPE html><html><head><title>${report.title}</title><style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:2rem 3rem;max-width:800px;margin:0 auto;color:#1d1d1f}</style></head><body><h1 style="font-size:20px;margin-bottom:0.25rem">${report.title}</h1>${html}</body></html>`)
+    w.document.close()
+    w.print()
+  }
+
+  function exportReportText() {
+    if (!report) return
+    const content = report.content as Record<string, unknown>
+    const sections = content.report as Record<string, string> | undefined
+    if (!sections) return
+    const text = Object.entries(sections)
+      .map(([k, v]) => `## ${k.toUpperCase().replace(/_/g,' ')}\n\n${v}`)
+      .join('\n\n---\n\n')
+    const blob = new Blob([`# ${report.title}\n\n${text}`], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = `${report.title}.txt`; a.click()
+    URL.revokeObjectURL(url)
+  }
+
   useEffect(() => {
     if (!user || !id) return
     const supabase = getSupabase()
@@ -79,8 +108,10 @@ export default function WorkflowDetailPage() {
     const runId = activeRunId ?? runs[0]?.id
     if (!runId) return
     const supabase = getSupabase()
-    supabase.from('reports').select('*').eq('run_id', runId).maybeSingle()
-      .then(({ data }) => setReport(data as Report | null))
+    supabase.from('reports').select('*').eq('run_id', runId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .then(({ data }) => setReport((data?.[0] as Report) ?? null))
   }, [activeRunId, runs])
 
   if (loading) return <div className="flex justify-center pt-28"><Spinner size="lg" className="text-black/30" /></div>
@@ -248,7 +279,7 @@ export default function WorkflowDetailPage() {
               {/* Triggers — light */}
               <TabsContent value="triggers">
                 <div className="bg-white border border-black/8 rounded-xl p-5">
-                  <WebhookExecutor workflowId={workflow.id} />
+                  <WebhookExecutor workflowId={workflow.id} webhookSecret={workflow.definition.webhook_secret} />
                 </div>
               </TabsContent>
 
@@ -262,13 +293,29 @@ export default function WorkflowDetailPage() {
                         eval_result: (report.content as Record<string, unknown>).eval_result,
                       }}
                       title={report.title}
+                      onExportPdf={exportReportPdf}
+                      onExportXlsx={exportReportText}
                     />
-                  ) : (
-                    <div className="text-center py-12">
-                      <p className="text-sm text-black/30">No report yet</p>
-                      <p className="text-xs text-black/20 mt-1">Reports are generated after a completed run with a delivery step.</p>
-                    </div>
-                  )}
+                  ) : (() => {
+                    const currentRun = runs.find(r => r.id === (activeRunId ?? runs[0]?.id))
+                    return (
+                      <div className="text-center py-12">
+                        {currentRun?.status === 'failed' ? (
+                          <>
+                            <p className="text-sm font-medium text-red-500 mb-2">Run failed</p>
+                            <p className="text-xs text-black/40 font-mono max-w-md mx-auto leading-relaxed">
+                              {currentRun.error_message ?? 'Unknown error'}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm text-black/30">No report yet</p>
+                            <p className="text-xs text-black/20 mt-1">Reports appear after a run completes.</p>
+                          </>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
               </TabsContent>
             </Tabs>

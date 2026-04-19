@@ -197,7 +197,7 @@ export default function InboxPage() {
                   <div key={e.id} className="apple-card overflow-hidden">
                     {/* Timer bar */}
                     <div className="h-1 bg-red-500/10 w-full overflow-hidden">
-                      <div className="h-full bg-red-500 transition-all duration-1000 ease-linear" style={{ width: `\${pct}%` }} />
+                      <div className="h-full bg-red-500 transition-all duration-1000 ease-linear" style={{ width: `${pct}%` }} />
                     </div>
 
                     <div className="p-5 flex items-start gap-4">
