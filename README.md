@@ -380,6 +380,62 @@ The UI follows an Apple-inspired design language documented in [`DESIGN.md`](./D
 
 ---
 
+## video-use — AI video editing skill
+
+[video-use](https://github.com/browser-use/video-use) is included as a Git submodule at `skills/video-use/`. It lets Claude Code edit raw screen recordings and demo footage into polished videos via conversational instructions — useful for creating demo videos of DATA-AI workflow runs.
+
+### What it does
+
+- Removes filler words, silence, and verbal slips automatically
+- Applies color grading, audio fades, and subtitle burn-in
+- Generates animation overlays (titles, diagrams, typography cards)
+- Self-evaluates output quality before presenting the final render
+
+Editing is transcript-driven: video is transcribed to word-level timestamps (via ElevenLabs Scribe), then Claude reasons from text rather than raw frames — making it fast and token-efficient.
+
+### Install
+
+```bash
+# After cloning (submodule is already registered)
+git submodule update --init --recursive
+
+# Python dependencies
+pip install -e skills/video-use
+
+# Optional: animation overlays
+pip install -e "skills/video-use[animations]"
+
+# System tools
+brew install ffmpeg          # required
+brew install yt-dlp          # optional — for downloading online sources
+
+# ElevenLabs API key (for transcription)
+echo "ELEVENLABS_API_KEY=your_key_here" >> skills/video-use/.env
+```
+
+Activate as a Claude Code skill (one-time):
+
+```bash
+ln -s "$(pwd)/skills/video-use" ~/.claude/skills/video-use
+```
+
+### Usage
+
+Navigate to a folder containing your raw video files and run `claude`:
+
+```bash
+cd /path/to/raw-recordings
+claude
+```
+
+Then describe what you want:
+
+> "Edit these screen recordings into a 90-second demo of the swarm visualizer running a revenue report workflow. Start with the workflow trigger, show the live event feed mid-run, end on the final report with the quality score."
+
+Claude will inventory your sources, propose a strategy for approval, then produce `edit/final.mp4`.
+
+---
+
 ## Scripts
 
 ```bash
