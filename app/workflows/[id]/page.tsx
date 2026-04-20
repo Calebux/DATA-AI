@@ -239,7 +239,6 @@ export default function WorkflowDetailPage() {
                         eval_result: (report.content as Record<string, unknown>).eval_result,
                       }}
                       title={report.title}
-                      onExportPdf={exportReportPdf}
                       onExportXlsx={exportReportText}
                     />
                   ) : isRunning ? (

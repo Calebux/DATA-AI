@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import {
   ResponsiveContainer,
   LineChart, Line,
@@ -9,7 +9,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
 import { Button } from '@/components/ui/button'
-import { Download, FileText } from 'lucide-react'
+import { Download, FileText, Maximize2, X } from 'lucide-react'
 import type { EvalResult } from '@/types'
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -49,7 +49,6 @@ function detectTimeKey(keys: string[]) {
   return keys.find(k => /^(month|period|date|quarter|week|year|time)$/i.test(k))
 }
 
-// Separate object entries into sub-objects vs primitives
 function partitionObj(obj: Record<string, unknown>) {
   const subObjs: [string, Record<string, unknown>][] = []
   const primitives: [string, unknown][] = []
@@ -62,12 +61,10 @@ function partitionObj(obj: Record<string, unknown>) {
   return { subObjs, primitives }
 }
 
-// Convert { "Q1": { total: 148 }, "Q2": { total: 149 } } → [{ _cat: "Q1", total: 148 }, ...]
 function objOfObjsToRows(obj: Record<string, Record<string, unknown>>, catKey = '_cat') {
   return Object.entries(obj).map(([k, v]) => ({ [catKey]: k, ...v }))
 }
 
-// Find best numeric key for pie (prefer pct/share, else largest value key)
 function pickPieKey(sample: Record<string, unknown>): string | null {
   const numKeys = Object.keys(sample).filter(k => isNum(sample[k]))
   const pctKey = numKeys.find(k => /pct|share|percent/i.test(k))
@@ -239,12 +236,10 @@ function RenderValue({ label, value, depth = 0 }: {
     ? <p className="text-[10px] font-bold text-black/35 uppercase tracking-widest mb-2">{fmtKey(label)}</p>
     : null
 
-  // ── string ──────────────────────────────────────────────────────────────────
   if (typeof parsed === 'string') {
     return <div>{labelEl}<p className="text-sm text-black/70 leading-relaxed">{parsed}</p></div>
   }
 
-  // ── number / boolean ────────────────────────────────────────────────────────
   if (typeof parsed === 'number' || typeof parsed === 'boolean') {
     return (
       <div>
@@ -254,11 +249,9 @@ function RenderValue({ label, value, depth = 0 }: {
     )
   }
 
-  // ── array ───────────────────────────────────────────────────────────────────
   if (Array.isArray(parsed)) {
     if (!parsed.length) return null
 
-    // primitive list → bullets
     if (parsed.every(item => typeof item !== 'object' || item === null)) {
       return (
         <div>
@@ -274,7 +267,6 @@ function RenderValue({ label, value, depth = 0 }: {
 
     const rows = parsed as Record<string, unknown>[]
 
-    // anomaly list
     if (rows[0]?.severity !== undefined) {
       return (
         <div>
@@ -284,7 +276,6 @@ function RenderValue({ label, value, depth = 0 }: {
       )
     }
 
-    // time series → line chart + table
     const keys = Object.keys(rows[0])
     const tk = detectTimeKey(keys)
     const numKeys = keys.filter(k => k !== tk && isNum(rows[0][k]))
@@ -299,7 +290,6 @@ function RenderValue({ label, value, depth = 0 }: {
       )
     }
 
-    // categorical array → bar chart + table
     const catKey = keys.find(k => typeof rows[0][k] === 'string' && !META_KEYS.has(k))
     if (catKey && numKeys.length && rows.length <= 20) {
       return (
@@ -314,32 +304,27 @@ function RenderValue({ label, value, depth = 0 }: {
     return <div>{labelEl}<DataTable rows={rows} /></div>
   }
 
-  // ── object ──────────────────────────────────────────────────────────────────
   const obj = parsed as Record<string, unknown>
   const entries = Object.entries(obj).filter(([, v]) => v != null)
   if (!entries.length) return null
 
   const allPrimitive = entries.every(([, v]) => typeof v !== 'object' || v === null)
 
-  // flat object
   if (allPrimitive) {
     const numEntries = entries.filter(([, v]) => isNum(v))
     const total = numEntries.reduce((s, [, v]) => s + (v as number), 0)
     const isPct = numEntries.length >= 2 && numEntries.length <= 10 && Math.abs(total - 100) < 2
 
-    // percentage breakdown → pie chart
     if (isPct) {
       const pieData = numEntries.map(([k, v]) => ({ name: fmtKey(k), value: v as number }))
       return <div>{labelEl}<PieChartViz data={pieData} /></div>
     }
 
-    // small set of comparable numbers → bar chart
     if (numEntries.length >= 2 && numEntries.length <= 10 && entries.every(([, v]) => isNum(v))) {
       const barRows = numEntries.map(([k, v]) => ({ _cat: fmtKey(k), value: v as number }))
       return <div>{labelEl}<BarChartViz rows={barRows} catKey="_cat" /></div>
     }
 
-    // mixed or large → stat grid
     const hasNums = numEntries.length > 0
     return (
       <div>
@@ -360,7 +345,6 @@ function RenderValue({ label, value, depth = 0 }: {
     )
   }
 
-  // object of sub-objects (e.g. quarterly_revenue, annual_cohort_totals)
   const { subObjs, primitives } = partitionObj(obj)
   const isObjOfObjs = subObjs.length >= 2 && subObjs.length <= 10
     && subObjs.every(([, v]) => Object.values(v).some(isNum))
@@ -378,7 +362,6 @@ function RenderValue({ label, value, depth = 0 }: {
       <div className="space-y-3">
         {labelEl}
         {isPct ? (
-          // share-based → pie + bar side by side on larger screens
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <PieChartViz data={subObjs.map(([k, v]) => ({ name: fmtKey(k), value: (v[pctKey!] as number) ?? 0 }))} />
             <BarChartViz rows={rows} catKey="_cat" />
@@ -394,7 +377,6 @@ function RenderValue({ label, value, depth = 0 }: {
     )
   }
 
-  // mixed / nested — at depth 0 wrap each key in a card
   if (depth === 0) {
     return (
       <div className="space-y-4">
@@ -427,7 +409,10 @@ interface ReportRendererProps {
   onExportXlsx?: () => void
 }
 
-export default function ReportRenderer({ report, title, onExportPdf, onExportXlsx }: ReportRendererProps) {
+export default function ReportRenderer({ report, title, onExportXlsx }: ReportRendererProps) {
+  const [fullscreen, setFullscreen] = useState(false)
+  const printRef = useRef<HTMLDivElement>(null)
+
   const evalResult = report.eval_result as EvalResult | undefined
   const score = evalResult?.overall_score != null
     ? `${(evalResult.overall_score * 10).toFixed(1)}/10`
@@ -438,6 +423,47 @@ export default function ReportRenderer({ report, title, onExportPdf, onExportXls
     [report],
   )
 
+  // Close fullscreen on Escape
+  useEffect(() => {
+    if (!fullscreen) return
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setFullscreen(false) }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [fullscreen])
+
+  function handlePdf() {
+    const el = printRef.current
+    if (!el) return
+    const win = window.open('', '_blank')
+    if (!win) return
+    win.document.write(`<!DOCTYPE html><html>
+<head>
+  <meta charset="utf-8">
+  <title>${title ?? 'Report'}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;padding:48px;max-width:960px;margin:0 auto;color:#1d1d1f;background:white;font-size:14px;line-height:1.6}
+    h2{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#999;border-bottom:1px solid #e5e7eb;padding-bottom:8px;margin:32px 0 16px}
+    p{margin-bottom:8px;color:#3c3c43}
+    ul{padding-left:20px}li{margin-bottom:4px;color:#3c3c43}
+    table{width:100%;border-collapse:collapse;font-size:12px;margin:12px 0}
+    th{text-align:left;padding:8px 12px;background:#f5f5f7;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#666;border-bottom:2px solid #e5e7eb}
+    td{padding:7px 12px;border-bottom:1px solid #f0f0f0}
+    tr:nth-child(even) td{background:#fafafa}
+    svg{max-width:100%}
+    @media print{body{padding:24px}@page{margin:1.5cm}}
+  </style>
+</head>
+<body>
+  ${title ? `<h1 style="font-size:22px;font-weight:700;margin-bottom:${score ? '4px' : '32px'}">${title}</h1>` : ''}
+  ${score ? `<p style="font-size:12px;color:#999;margin-bottom:32px">Quality score: <strong style="color:#16a34a">${score}</strong></p>` : ''}
+  ${el.innerHTML}
+</body>
+</html>`)
+    win.document.close()
+    setTimeout(() => win.print(), 500)
+  }
+
   if (sections.length === 0) {
     return (
       <div className="text-center py-10">
@@ -446,33 +472,8 @@ export default function ReportRenderer({ report, title, onExportPdf, onExportXls
     )
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          {title && <p className="text-sm font-medium text-black">{title}</p>}
-          {score && (
-            <p className="text-xs text-black/40 mt-0.5">
-              Quality: <span className="text-emerald-600 font-medium">{score}</span>
-            </p>
-          )}
-        </div>
-        <div className="flex gap-2">
-          {onExportXlsx && (
-            <Button variant="outline" size="sm" onClick={onExportXlsx}>
-              <FileText className="h-4 w-4" /> XLSX
-            </Button>
-          )}
-          {onExportPdf && (
-            <Button variant="outline" size="sm" onClick={onExportPdf}>
-              <Download className="h-4 w-4" /> PDF
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Report sections */}
+  const reportBody = (
+    <>
       {sections.map(([key, value]) => (
         <div key={key}>
           <h2 className="text-[11px] font-bold text-black/35 uppercase tracking-widest border-b border-black/8 pb-2 mb-4">
@@ -482,7 +483,6 @@ export default function ReportRenderer({ report, title, onExportPdf, onExportXls
         </div>
       ))}
 
-      {/* Eval scores */}
       {evalResult?.scores && (
         <div className="border border-black/8 rounded-xl p-4 bg-black/[0.01]">
           <p className="text-[10px] font-bold text-black/35 uppercase tracking-widest mb-3">Quality Scores</p>
@@ -496,6 +496,64 @@ export default function ReportRenderer({ report, title, onExportPdf, onExportXls
           </div>
         </div>
       )}
+    </>
+  )
+
+  const toolbar = (inFullscreen: boolean) => (
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        {title && <p className="text-sm font-medium text-black">{title}</p>}
+        {score && (
+          <p className="text-xs text-black/40 mt-0.5">
+            Quality: <span className="text-emerald-600 font-medium">{score}</span>
+          </p>
+        )}
+      </div>
+      <div className="flex gap-2">
+        {onExportXlsx && (
+          <Button variant="outline" size="sm" onClick={onExportXlsx}>
+            <FileText className="h-4 w-4 mr-1" /> XLSX
+          </Button>
+        )}
+        <Button variant="outline" size="sm" onClick={handlePdf}>
+          <Download className="h-4 w-4 mr-1" /> PDF
+        </Button>
+        {inFullscreen ? (
+          <Button variant="outline" size="sm" onClick={() => setFullscreen(false)}>
+            <X className="h-4 w-4 mr-1" /> Close
+          </Button>
+        ) : (
+          <Button variant="outline" size="sm" onClick={() => setFullscreen(true)} title="Full screen">
+            <Maximize2 className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
     </div>
+  )
+
+  return (
+    <>
+      {/* ── Fullscreen overlay ──────────────────────────────────────────────── */}
+      {fullscreen && (
+        <div className="fixed inset-0 z-50 bg-white flex flex-col">
+          <div className="flex-none border-b border-black/8 px-6 py-3 bg-white/95 backdrop-blur">
+            {toolbar(true)}
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-5xl mx-auto px-8 py-8 space-y-6">
+              {reportBody}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Normal view ─────────────────────────────────────────────────────── */}
+      <div className="space-y-6">
+        {toolbar(false)}
+        <div ref={printRef} className="space-y-6">
+          {reportBody}
+        </div>
+      </div>
+    </>
   )
 }
