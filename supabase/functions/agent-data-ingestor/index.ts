@@ -4,30 +4,39 @@ import type { WorkflowStep, DataSource } from '../_shared/types.ts'
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 
 Deno.serve(async (req) => {
-  const { step, run_id }: { step: WorkflowStep; run_id: string } = await req.json()
-  const outputs: Record<string, unknown> = {}
+  try {
+    const { step, run_id }: { step: WorkflowStep; run_id: string } = await req.json()
+    const outputs: Record<string, unknown> = {}
 
-  for (const source of (step.data_sources ?? [])) {
-    const idx = (step.data_sources ?? []).indexOf(source)
-    const key = step.output_keys[idx] ?? `source_${idx}`
-    try {
-      outputs[key] = await fetchSource(source)
-    } catch (err) {
-      outputs[key] = { error: String(err), source_type: source.type, url: source.url }
+    for (const source of (step.data_sources ?? [])) {
+      const idx = (step.data_sources ?? []).indexOf(source)
+      const key = step.output_keys[idx] ?? `source_${idx}`
+      try {
+        outputs[key] = await fetchSource(source)
+      } catch (err) {
+        outputs[key] = { error: String(err), source_type: source.type, url: source.url }
+      }
     }
-  }
 
-  // If single output key, merge all source results
-  if (step.output_keys.length === 1 && (step.data_sources ?? []).length > 1) {
-    const merged = Object.values(outputs).reduce((acc, val) => ({ ...(acc as object), ...(val as object) }), {})
-    const key = step.output_keys[0]
-    const result = { [key]: merged }
-    await supabase.from('agent_memory').insert({ run_id, step_id: step.step_id, agent_role: 'data_ingestor', output: result, created_at: new Date().toISOString() })
-    return new Response(JSON.stringify({ outputs: result }), { headers: { 'Content-Type': 'application/json' } })
-  }
+    // If single output key, merge all source results
+    if (step.output_keys.length === 1 && (step.data_sources ?? []).length > 1) {
+      const merged = Object.values(outputs).reduce((acc, val) => ({ ...(acc as object), ...(val as object) }), {})
+      const key = step.output_keys[0]
+      const result = { [key]: merged }
+      await supabase.from('agent_memory').insert({ run_id, step_id: step.step_id, agent_role: 'data_ingestor', output: result, created_at: new Date().toISOString() })
+      return new Response(JSON.stringify({ outputs: result }), { headers: { 'Content-Type': 'application/json' } })
+    }
 
-  await supabase.from('agent_memory').insert({ run_id, step_id: step.step_id, agent_role: 'data_ingestor', output: outputs, created_at: new Date().toISOString() })
-  return new Response(JSON.stringify({ outputs }), { headers: { 'Content-Type': 'application/json' } })
+    await supabase.from('agent_memory').insert({ run_id, step_id: step.step_id, agent_role: 'data_ingestor', output: outputs, created_at: new Date().toISOString() })
+    return new Response(JSON.stringify({ outputs }), { headers: { 'Content-Type': 'application/json' } })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[agent-data-ingestor] error:', message)
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
 })
 
 async function fetchSource(source: DataSource): Promise<unknown> {
@@ -60,8 +69,8 @@ async function fetchHttp(source: DataSource): Promise<unknown> {
   if (ct.includes('application/json')) return res.json()
 
   const text = await res.text()
-  // Detect CSV by URL extension or content-type
-  if (ct.includes('text/csv') || source.url.endsWith('.csv') || source.url.includes('.csv?')) {
+  // Detect CSV by URL extension, content-type, or Google Sheets export format
+  if (ct.includes('text/csv') || source.url.endsWith('.csv') || source.url.includes('.csv?') || source.url.includes('format=csv')) {
     return { raw_csv: text, url: source.url, fetched_at: new Date().toISOString() }
   }
   return { text: text.slice(0, 20000), url: source.url, fetched_at: new Date().toISOString() }
@@ -85,7 +94,27 @@ async function fetchScrape(source: DataSource): Promise<unknown> {
 async function fetchSheets(source: DataSource): Promise<unknown> {
   if (!source.spreadsheet_id) throw new Error('google_sheets requires spreadsheet_id')
   const token = Deno.env.get('GOOGLE_ACCESS_TOKEN')
-  if (!token) throw new Error('GOOGLE_ACCESS_TOKEN not configured')
+
+  // No token — fall back to public CSV export (works for "Anyone with link can view" sheets)
+  if (!token) {
+    const sheetParam = source.sheet_name ? `&sheet=${encodeURIComponent(source.sheet_name)}` : ''
+    const csvUrl = `https://docs.google.com/spreadsheets/d/${source.spreadsheet_id}/export?format=csv${sheetParam}`
+    const res = await fetch(csvUrl)
+    if (!res.ok) throw new Error(`Google Sheets CSV export failed (${res.status}). Make sure the sheet is shared as "Anyone with the link can view".`)
+    const text = await res.text()
+    // Parse CSV into headers + rows
+    const lines = text.trim().split('\n').map(l => l.split(',').map(c => c.replace(/^"|"$/g, '').trim()))
+    const [headers, ...rows] = lines
+    return {
+      headers,
+      rows: rows.map(row => Object.fromEntries(headers.map((h, i) => [h, row[i] ?? null]))),
+      raw_csv: text,
+      spreadsheet_id: source.spreadsheet_id,
+      fetched_at: new Date().toISOString(),
+    }
+  }
+
+  // Authenticated access via Sheets API
   const range = `${source.sheet_name ?? 'Sheet1'}!A1:Z1000`
   const res = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${source.spreadsheet_id}/values/${encodeURIComponent(range)}`,

@@ -107,19 +107,17 @@ export default function SwarmVisualizer({ steps, runId, running, replayEvents }:
   useEffect(() => {
     if (replayEvents !== undefined) return
     const supabase = getSupabase()
-    supabase
-      .from('agent_events').select('*').eq('run_id', runId).order('created_at', { ascending: true })
-      .then(({ data }) => { if (data) setLiveEvents(data as AgentEvent[]) })
 
-    const ch = supabase.channel(`viz:${runId}`)
-      .on('broadcast', { event: 'agent_event' }, ({ payload }) => {
-        setLiveEvents(prev => [...prev, { ...payload, id: crypto.randomUUID(), run_id: runId } as AgentEvent])
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'agent_events', filter: `run_id=eq.${runId}` },
-        (p) => setLiveEvents(prev => [...prev, p.new as AgentEvent])
-      )
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    async function fetchEvents() {
+      const { data } = await supabase
+        .from('agent_events').select('*').eq('run_id', runId).order('created_at', { ascending: true })
+      if (data) setLiveEvents(data as AgentEvent[])
+    }
+
+    fetchEvents()
+    // Poll every 2s while running — works without WebSocket
+    const interval = setInterval(fetchEvents, 2000)
+    return () => clearInterval(interval)
   }, [runId, replayEvents])
 
   const events = replayEvents ?? liveEvents

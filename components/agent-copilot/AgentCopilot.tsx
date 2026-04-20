@@ -44,28 +44,15 @@ export default function AgentCopilot({ runId, running }: AgentCopilotProps) {
   useEffect(() => {
     const supabase = getSupabase()
 
-    // Load existing events
-    supabase
-      .from('agent_events')
-      .select('*')
-      .eq('run_id', runId)
-      .order('created_at', { ascending: true })
-      .then(({ data }) => { if (data) setEvents(data as AgentEvent[]) })
+    async function fetchEvents() {
+      const { data } = await supabase
+        .from('agent_events').select('*').eq('run_id', runId).order('created_at', { ascending: true })
+      if (data) setEvents(data as AgentEvent[])
+    }
 
-    // Subscribe to live events
-    const channel = supabase
-      .channel(`run:${runId}`)
-      .on('broadcast', { event: 'agent_event' }, ({ payload }) => {
-        setEvents(prev => [...prev, { ...payload, id: crypto.randomUUID(), run_id: runId } as AgentEvent])
-      })
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'agent_events', filter: `run_id=eq.${runId}` },
-        (payload) => setEvents(prev => [...prev, payload.new as AgentEvent])
-      )
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
+    fetchEvents()
+    const interval = setInterval(fetchEvents, 2000)
+    return () => clearInterval(interval)
   }, [runId])
 
   useEffect(() => {
