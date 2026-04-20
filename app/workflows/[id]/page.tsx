@@ -13,7 +13,6 @@ import AgentCopilot from '@/components/agent-copilot/AgentCopilot'
 import OrchestratorModal from '@/components/orchestrator-modal/OrchestratorModal'
 import ReportRenderer from '@/components/report-renderer/ReportRenderer'
 import WorkflowEditDrawer from '@/components/workflow-builder/WorkflowEditDrawer'
-import SwarmVisualizer from '@/components/swarm-visualizer/SwarmVisualizer'
 import Link from 'next/link'
 import { ArrowLeft, Play, CheckCircle2, Circle, Loader2, XCircle, Settings2, Clock } from 'lucide-react'
 import { formatRelative } from '@/lib/utils'
@@ -25,7 +24,7 @@ const RUN_BADGE = { running: 'default', complete: 'green', failed: 'red' } as co
 
 type StepStatus = 'pending' | 'running' | 'complete' | 'failed'
 
-function deriveStepStatuses(events: AgentEvent[], stepIds: string[]): Record<string, StepStatus> {
+function deriveStepStatuses(events: AgentEvent[], stepIds: string[], runDone: boolean): Record<string, StepStatus> {
   const statuses: Record<string, StepStatus> = {}
   for (const id of stepIds) statuses[id] = 'pending'
   for (const ev of events) {
@@ -34,6 +33,12 @@ function deriveStepStatuses(events: AgentEvent[], stepIds: string[]): Record<str
     if (['TASK_COMPLETE','DATA_READY','ANALYSIS_READY','RESEARCH_COMPLETE','EVAL_PASS','DELIVERY_SENT','CONSENSUS_RESOLVED'].includes(ev.event_type))
       statuses[ev.step_id] = 'complete'
     if (ev.event_type === 'AGENT_ERROR') statuses[ev.step_id] = 'failed'
+  }
+  // If run is done but step is still "running", it failed silently
+  if (runDone) {
+    for (const id of stepIds) {
+      if (statuses[id] === 'running') statuses[id] = 'failed'
+    }
   }
   return statuses
 }
@@ -151,7 +156,8 @@ export default function WorkflowDetailPage() {
   const activeRun = runs.find(r => r.id === activeRunId) ?? runs[0] ?? null
   const isRunning = activeRun?.status === 'running'
   const stepIds = workflow.definition.steps.map(s => s.step_id)
-  const stepStatuses = deriveStepStatuses(events, stepIds)
+  const runDone = activeRun?.status === 'complete' || activeRun?.status === 'failed'
+  const stepStatuses = deriveStepStatuses(events, stepIds, !!runDone)
 
   return (
     <div className="min-h-screen -mt-14 pt-14">
@@ -178,18 +184,6 @@ export default function WorkflowDetailPage() {
             <Play className="h-4 w-4" /> Run Now
           </Button>
         </div>
-
-        {/* ── Swarm visualizer ─────────────────────────────────────────── */}
-        {activeRunId && (
-          <div className="dark-section rounded-xl overflow-hidden mb-6">
-            <p className="text-[10px] text-white/25 uppercase tracking-widest px-4 pt-3 pb-0">Execution Map</p>
-            <SwarmVisualizer
-              steps={workflow.definition.steps}
-              runId={activeRunId}
-              running={isRunning}
-            />
-          </div>
-        )}
 
         {/* ── Step progress strip ───────────────────────────────────────── */}
         <div className="bg-white border border-black/8 rounded-xl p-5 mb-6">
@@ -277,7 +271,7 @@ export default function WorkflowDetailPage() {
 
               {/* Feed */}
               <TabsContent value="feed">
-                <div className="dark-section rounded-xl overflow-hidden h-[420px]">
+                <div className="bg-[#0a0a0a] rounded-xl overflow-hidden h-[420px] border border-white/6">
                   {activeRunId
                     ? <AgentCopilot runId={activeRunId} running={isRunning} />
                     : <p className="text-white/30 text-sm text-center pt-16">No run selected</p>
