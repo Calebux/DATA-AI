@@ -1,4 +1,4 @@
-# HoursBack — Agent Swarm Platform
+# DATA-AI (HoursBack v2) — Agent Swarm Platform
 
 A visual dashboard for building, deploying, and monitoring multi-agent AI workflows. Define a pipeline of specialized agents, set a trigger, and let the swarm run — with real-time observability, consensus voting, human escalation, and quality-gated report delivery built in.
 
@@ -254,8 +254,8 @@ reports (
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/Calebux/HoursBack.git
-cd HoursBack
+git clone https://github.com/Calebux/DATA-AI.git
+cd DATA-AI
 npm install
 ```
 
@@ -382,7 +382,7 @@ The UI follows an Apple-inspired design language documented in [`DESIGN.md`](./D
 
 ## video-use — AI video editing skill
 
-[video-use](https://github.com/browser-use/video-use) is included as a Git submodule at `skills/video-use/`. It lets Claude Code edit raw screen recordings and demo footage into polished videos via conversational instructions — useful for creating demo videos of HoursBack workflow runs.
+[video-use](https://github.com/browser-use/video-use) is included as a Git submodule at `skills/video-use/`. It lets Claude Code edit raw screen recordings and demo footage into polished videos via conversational instructions — useful for creating demo videos of DATA-AI workflow runs.
 
 ### What it does
 

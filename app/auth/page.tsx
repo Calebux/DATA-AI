@@ -30,8 +30,8 @@ export default function AuthPage() {
 
         {/* Logo */}
         <div className="mb-10">
-          <p className="text-[13px] font-bold tracking-[0.18em] text-black">HoursBack</p>
-          <p className="text-[8px] tracking-[0.14em] uppercase text-black/30 mt-0.5">Agent Swarm Automation</p>
+          <p className="text-[13px] font-bold tracking-[0.18em] text-black">DATA-AI</p>
+          <p className="text-[8px] tracking-[0.14em] uppercase text-black/30 mt-0.5">HoursBack v2</p>
         </div>
 
         {/* Mode toggle */}

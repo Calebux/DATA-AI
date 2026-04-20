@@ -85,7 +85,7 @@ export default function HomePage() {
           <p className="text-sm text-black/45 leading-relaxed max-w-lg">
             Most business intelligence work is mechanical repetition — pulling the same data,
             running the same analysis, writing the same summaries.
-            HoursBack replaces that cycle with a coordinated swarm of AI agents.
+            DATA-AI replaces that cycle with a coordinated swarm of AI agents.
             You define the rules once. The system runs indefinitely.
           </p>
         </div>
