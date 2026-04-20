@@ -79,7 +79,13 @@ export default function WorkflowDetailPage() {
         supabase.from('workflow_runs').select('*').eq('workflow_id', id).order('triggered_at', { ascending: false }).limit(20),
       ])
       if (wf) setWorkflow(wf as Workflow)
-      if (runData) setRuns(runData as WorkflowRun[])
+      if (runData) {
+        setRuns(runData as WorkflowRun[])
+        // Auto-select latest run if none specified in URL
+        if (!searchParams.get('run') && runData[0]) {
+          setActiveRunId(runData[0].id)
+        }
+      }
       setLoading(false)
     }
 
@@ -305,6 +311,13 @@ export default function WorkflowDetailPage() {
                             <p className="text-sm font-medium text-red-500 mb-2">Run failed</p>
                             <p className="text-xs text-black/40 font-mono max-w-md mx-auto leading-relaxed">
                               {currentRun.error_message ?? 'Unknown error'}
+                            </p>
+                          </>
+                        ) : currentRun?.status === 'complete' ? (
+                          <>
+                            <p className="text-sm font-medium text-black/50 mb-1">Run completed but no report was generated</p>
+                            <p className="text-xs text-black/30 max-w-xs mx-auto leading-relaxed">
+                              This usually means a data source had no URL configured, or an agent step failed. Check the <strong>Feed</strong> tab to see what happened.
                             </p>
                           </>
                         ) : (
