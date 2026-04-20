@@ -1,12 +1,29 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import type { WorkflowDefinition, WorkflowStep, AgentEvent } from '../_shared/types.ts'
 
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL')!,
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-)
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!.trim()
+const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!.trim()
+
+const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
+
+async function invokeAgent(functionName: string, body: unknown, authHeader: string): Promise<Record<string, unknown>> {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/${functionName}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': authHeader,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`${functionName}: HTTP ${res.status} — ${text.slice(0, 300)}`)
+  }
+  return res.json()
+}
 
 Deno.serve(async (req) => {
+  const authHeader = req.headers.get('Authorization') ?? `Bearer ${SERVICE_ROLE_KEY}`
   const { workflow_id, trigger_context, run_id: existingRunId } = await req.json()
 
   const { data: workflow } = await supabase
@@ -44,17 +61,25 @@ Deno.serve(async (req) => {
       channels: workflow.definition.output.channels,
     }
 
+    let anyFailure = false
+
     for (const phase of taskGraph.phases) {
       const results = await Promise.allSettled(
-        phase.map(step => spawnAgent(step, runId, workingMemory, channel, system_prompt, deliveryMeta))
+        phase.map(step => spawnAgent(step, runId, workingMemory, channel, system_prompt, deliveryMeta, authHeader))
       )
       for (const result of results) {
         if (result.status === 'fulfilled') {
           Object.assign(workingMemory, result.value)
         } else {
+          anyFailure = true
           console.error('[Orchestrator] Agent failure:', result.reason)
         }
       }
+    }
+
+    if (anyFailure && Object.keys(workingMemory).filter(k => k !== 'trigger_context').length === 0) {
+      // All agents failed and nothing was produced — mark as failed
+      throw new Error('All agents failed. Check the Feed tab for AGENT_ERROR events.')
     }
 
     await supabase.from('workflow_runs')
@@ -114,31 +139,37 @@ async function spawnAgent(
   workingMemory: Record<string, unknown>,
   channel: ReturnType<typeof supabase.channel>,
   system_prompt?: string,
-  deliveryMeta?: { workflow_name: string; channels: unknown[] }
+  deliveryMeta?: { workflow_name: string; channels: unknown[] },
+  authHeader = `Bearer ${SERVICE_ROLE_KEY}`
 ): Promise<Record<string, unknown>> {
   await emit(channel, runId, 'TASK_ASSIGNED', 'orchestrator', { step_id: step.step_id, agent_role: step.agent_role })
 
   const input = Object.fromEntries(step.input_sources.map(k => [k, workingMemory[k]]))
 
   if (step.consensus) {
-    return runConsensus(step, input, runId, channel, system_prompt)
+    return runConsensus(step, input, runId, channel, system_prompt, authHeader)
   }
 
   if (step.critique_loop) {
-    return runCritiqueLoop(step, input, runId, channel, system_prompt)
+    return runCritiqueLoop(step, input, runId, channel, system_prompt, authHeader)
   }
 
   const extraParams = step.agent_role === 'delivery' && deliveryMeta
     ? { workflow_name: deliveryMeta.workflow_name, channels: deliveryMeta.channels }
     : {}
 
-  const { data, error } = await supabase.functions.invoke(`agent-${step.agent_role}`, {
-    body: { step, input, run_id: runId, system_prompt, ...extraParams },
-  })
-  if (error) throw new Error(`Agent ${step.agent_role} failed: ${error.message}`)
+  let data: Record<string, unknown>
+  try {
+    data = await invokeAgent(`agent-${step.agent_role.replace(/_/g, '-')}`, { step, input, run_id: runId, system_prompt, ...extraParams }, authHeader)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error(`[Orchestrator] invoke error — ${msg}`)
+    await emit(channel, runId, 'AGENT_ERROR', 'orchestrator', { step_id: step.step_id, message: msg })
+    throw err
+  }
 
   await emit(channel, runId, 'TASK_COMPLETE', step.agent_role as 'analyst', { step_id: step.step_id })
-  return data.outputs
+  return data.outputs as Record<string, unknown>
 }
 
 async function runCritiqueLoop(
@@ -146,7 +177,8 @@ async function runCritiqueLoop(
   input: Record<string, unknown>,
   runId: string,
   channel: ReturnType<typeof supabase.channel>,
-  system_prompt?: string
+  system_prompt?: string,
+  authHeader = `Bearer ${SERVICE_ROLE_KEY}`
 ): Promise<Record<string, unknown>> {
   const { max_rounds = 2, critic_instructions } = step.critique_loop!
   let currentInput = input
@@ -154,26 +186,23 @@ async function runCritiqueLoop(
 
   for (let round = 0; round < max_rounds; round++) {
     // ── Analyst turn ──────────────────────────────────────────────────────
-    const { data: aData, error: aErr } = await supabase.functions.invoke(`agent-${step.agent_role}`, {
-      body: { step, input: currentInput, run_id: runId, system_prompt },
-    })
-    if (aErr) throw new Error(`Agent ${step.agent_role} failed (round ${round + 1}): ${aErr.message}`)
-    analystOutputs = aData.outputs
+    const aData = await invokeAgent(`agent-${step.agent_role.replace(/_/g, '-')}`, { step, input: currentInput, run_id: runId, system_prompt }, authHeader)
+    analystOutputs = aData.outputs as Record<string, unknown>
 
     // ── Critic turn ───────────────────────────────────────────────────────
     await emit(channel, runId, 'CRITIQUE_REQUESTED', step.agent_role as 'analyst', {
       step_id: step.step_id, round, max_rounds,
     })
 
-    const { data: cData, error: cErr } = await supabase.functions.invoke('agent-critic', {
-      body: { step, analyst_output: analystOutputs, critic_instructions, run_id: runId, round },
-    })
-    if (cErr) {
-      console.error(`[Orchestrator] Critic failed (round ${round + 1}):`, cErr.message)
+    let cData: Record<string, unknown>
+    try {
+      cData = await invokeAgent('agent-critic', { step, analyst_output: analystOutputs, critic_instructions, run_id: runId, round }, authHeader)
+    } catch (cErr) {
+      console.error(`[Orchestrator] Critic failed (round ${round + 1}):`, cErr)
       break // Don't block the pipeline on critic failures
     }
 
-    const critique = cData.outputs.critique as {
+    const critique = (cData.outputs as Record<string, unknown>).critique as {
       approved: boolean; confidence: number; feedback: string; issues: string[]
     }
 
@@ -201,7 +230,8 @@ async function runConsensus(
   input: Record<string, unknown>,
   runId: string,
   channel: ReturnType<typeof supabase.channel>,
-  system_prompt?: string
+  system_prompt?: string,
+  authHeader = `Bearer ${SERVICE_ROLE_KEY}`
 ): Promise<Record<string, unknown>> {
   const { agent_count, agreement_threshold, reconciliation } = step.consensus!
   await emit(channel, runId, 'CONSENSUS_START', 'orchestrator', { step_id: step.step_id, agent_count })
@@ -209,9 +239,7 @@ async function runConsensus(
   const instanceIds = Array.from({ length: agent_count }, () => crypto.randomUUID())
   const results = await Promise.allSettled(
     instanceIds.map(instance_id =>
-      supabase.functions.invoke(`agent-${step.agent_role}`, {
-        body: { step, input, run_id: runId, instance_id, system_prompt },
-      })
+      invokeAgent(`agent-${step.agent_role.replace(/_/g, '-')}`, { step, input, run_id: runId, instance_id, system_prompt }, authHeader)
     )
   )
 
@@ -219,7 +247,7 @@ async function runConsensus(
   for (let i = 0; i < results.length; i++) {
     const r = results[i]
     if (r.status === 'fulfilled') {
-      successful.push({ outputs: r.value.data.outputs, instanceId: instanceIds[i] })
+      successful.push({ outputs: r.value.outputs as Record<string, unknown>, instanceId: instanceIds[i] })
     }
   }
 

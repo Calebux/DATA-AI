@@ -4,30 +4,39 @@ import type { WorkflowStep, DataSource } from '../_shared/types.ts'
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 
 Deno.serve(async (req) => {
-  const { step, run_id }: { step: WorkflowStep; run_id: string } = await req.json()
-  const outputs: Record<string, unknown> = {}
+  try {
+    const { step, run_id }: { step: WorkflowStep; run_id: string } = await req.json()
+    const outputs: Record<string, unknown> = {}
 
-  for (const source of (step.data_sources ?? [])) {
-    const idx = (step.data_sources ?? []).indexOf(source)
-    const key = step.output_keys[idx] ?? `source_${idx}`
-    try {
-      outputs[key] = await fetchSource(source)
-    } catch (err) {
-      outputs[key] = { error: String(err), source_type: source.type, url: source.url }
+    for (const source of (step.data_sources ?? [])) {
+      const idx = (step.data_sources ?? []).indexOf(source)
+      const key = step.output_keys[idx] ?? `source_${idx}`
+      try {
+        outputs[key] = await fetchSource(source)
+      } catch (err) {
+        outputs[key] = { error: String(err), source_type: source.type, url: source.url }
+      }
     }
-  }
 
-  // If single output key, merge all source results
-  if (step.output_keys.length === 1 && (step.data_sources ?? []).length > 1) {
-    const merged = Object.values(outputs).reduce((acc, val) => ({ ...(acc as object), ...(val as object) }), {})
-    const key = step.output_keys[0]
-    const result = { [key]: merged }
-    await supabase.from('agent_memory').insert({ run_id, step_id: step.step_id, agent_role: 'data_ingestor', output: result, created_at: new Date().toISOString() })
-    return new Response(JSON.stringify({ outputs: result }), { headers: { 'Content-Type': 'application/json' } })
-  }
+    // If single output key, merge all source results
+    if (step.output_keys.length === 1 && (step.data_sources ?? []).length > 1) {
+      const merged = Object.values(outputs).reduce((acc, val) => ({ ...(acc as object), ...(val as object) }), {})
+      const key = step.output_keys[0]
+      const result = { [key]: merged }
+      await supabase.from('agent_memory').insert({ run_id, step_id: step.step_id, agent_role: 'data_ingestor', output: result, created_at: new Date().toISOString() })
+      return new Response(JSON.stringify({ outputs: result }), { headers: { 'Content-Type': 'application/json' } })
+    }
 
-  await supabase.from('agent_memory').insert({ run_id, step_id: step.step_id, agent_role: 'data_ingestor', output: outputs, created_at: new Date().toISOString() })
-  return new Response(JSON.stringify({ outputs }), { headers: { 'Content-Type': 'application/json' } })
+    await supabase.from('agent_memory').insert({ run_id, step_id: step.step_id, agent_role: 'data_ingestor', output: outputs, created_at: new Date().toISOString() })
+    return new Response(JSON.stringify({ outputs }), { headers: { 'Content-Type': 'application/json' } })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[agent-data-ingestor] error:', message)
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
 })
 
 async function fetchSource(source: DataSource): Promise<unknown> {
