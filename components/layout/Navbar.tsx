@@ -20,7 +20,7 @@ export default function Navbar() {
         {/* Logo */}
         <Link href="/" className="flex flex-col leading-none flex-shrink-0 group">
           <span className="text-[13px] font-bold tracking-[0.18em] text-white group-hover:text-white/70 transition-colors">
-            DATA-AI
+            HoursBack
           </span>
           <span className="text-[8px] tracking-[0.14em] uppercase mt-0.5 text-white/25">
             Agent Swarm Automation

@@ -5,7 +5,7 @@ import Navbar from '@/components/layout/Navbar'
 import SubNav from '@/components/layout/SubNav'
 
 export const metadata: Metadata = {
-  title: 'DATA-AI — Agent Workflow Automation',
+  title: 'HoursBack — Agent Workflow Automation',
   description: 'Automate complex business workflows with AI agent swarms. No code required.',
 }
 
