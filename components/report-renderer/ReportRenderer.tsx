@@ -2,35 +2,38 @@
 
 import { useMemo } from 'react'
 import {
-  ResponsiveContainer, LineChart, Line,
+  ResponsiveContainer,
+  LineChart, Line,
+  BarChart, Bar,
+  PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Download, FileText } from 'lucide-react'
 import type { EvalResult } from '@/types'
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
+// ─── constants ────────────────────────────────────────────────────────────────
 
-const CHART_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed', '#db2777']
+const COLORS = ['#2563eb', '#16a34a', '#d97706', '#7c3aed', '#db2777', '#0891b2', '#dc2626', '#65a30d']
 
 const META_KEYS = new Set([
   'eval_result', 'generated_at', 'id', 'note', 'flag',
   'methodology', 'rationale', 'context', 'cohort_label', 'assumptions',
 ])
 
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
 function tryParseJson(v: unknown): unknown {
   if (typeof v !== 'string') return v
-  const trimmed = v.trim()
-  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return v
-  try { return JSON.parse(trimmed) } catch { return v }
+  const t = v.trim()
+  if (!t.startsWith('{') && !t.startsWith('[')) return v
+  try { return JSON.parse(t) } catch { return v }
 }
 
 function isNum(v: unknown): v is number { return typeof v === 'number' && isFinite(v) }
 
 function fmtKey(k: string) {
-  return k.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/\b\w/g, c => c.toUpperCase())
+  return k.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\b\w/g, c => c.toUpperCase())
 }
 
 function fmtVal(v: unknown): string {
@@ -39,37 +42,44 @@ function fmtVal(v: unknown): string {
   return String(v)
 }
 
+const tooltipFmt = (v: unknown) =>
+  typeof v === 'number' ? v.toLocaleString(undefined, { maximumFractionDigits: 2 }) : String(v ?? '')
+
 function detectTimeKey(keys: string[]) {
   return keys.find(k => /^(month|period|date|quarter|week|year|time)$/i.test(k))
 }
 
-function isTimeSeriesRows(rows: Record<string, unknown>[]): boolean {
-  if (!rows.length || typeof rows[0] !== 'object' || rows[0] === null) return false
-  const keys = Object.keys(rows[0])
-  const tk = detectTimeKey(keys)
-  const numericKeys = keys.filter(k => k !== tk && isNum(rows[0][k]))
-  return !!tk && numericKeys.length > 0
+// Separate object entries into sub-objects vs primitives
+function partitionObj(obj: Record<string, unknown>) {
+  const subObjs: [string, Record<string, unknown>][] = []
+  const primitives: [string, unknown][] = []
+  for (const [k, v] of Object.entries(obj)) {
+    if (typeof v === 'object' && v !== null && !Array.isArray(v))
+      subObjs.push([k, v as Record<string, unknown>])
+    else
+      primitives.push([k, v])
+  }
+  return { subObjs, primitives }
 }
 
-function severityStyle(s: string) {
-  if (s === 'HIGH') return 'bg-red-50 border-red-200'
-  if (s === 'MEDIUM') return 'bg-amber-50 border-amber-200'
-  return 'bg-sky-50 border-sky-200'
+// Convert { "Q1": { total: 148 }, "Q2": { total: 149 } } → [{ _cat: "Q1", total: 148 }, ...]
+function objOfObjsToRows(obj: Record<string, Record<string, unknown>>, catKey = '_cat') {
+  return Object.entries(obj).map(([k, v]) => ({ [catKey]: k, ...v }))
 }
 
-function severityBadge(s: string) {
-  if (s === 'HIGH') return 'bg-red-100 text-red-700 border-red-200'
-  if (s === 'MEDIUM') return 'bg-amber-100 text-amber-700 border-amber-200'
-  return 'bg-sky-100 text-sky-700 border-sky-200'
+// Find best numeric key for pie (prefer pct/share, else largest value key)
+function pickPieKey(sample: Record<string, unknown>): string | null {
+  const numKeys = Object.keys(sample).filter(k => isNum(sample[k]))
+  const pctKey = numKeys.find(k => /pct|share|percent/i.test(k))
+  return pctKey ?? (numKeys.length ? numKeys[0] : null)
 }
 
-// ─── charts ───────────────────────────────────────────────────────────────────
+// ─── chart components ─────────────────────────────────────────────────────────
 
-function TimeSeriesChart({ rows }: { rows: Record<string, unknown>[] }) {
+function LineChartViz({ rows }: { rows: Record<string, unknown>[] }) {
   const keys = Object.keys(rows[0])
   const tk = detectTimeKey(keys)!
-  const numKeys = keys.filter(k => k !== tk && isNum(rows[0][k])).slice(0, 6)
-
+  const numKeys = keys.filter(k => k !== tk && isNum(rows[0][k]) && !META_KEYS.has(k)).slice(0, 6)
   return (
     <div className="w-full h-56 mt-3 mb-1">
       <ResponsiveContainer width="100%" height="100%">
@@ -77,13 +87,57 @@ function TimeSeriesChart({ rows }: { rows: Record<string, unknown>[] }) {
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
           <XAxis dataKey={tk} tick={{ fontSize: 11 }} />
           <YAxis tick={{ fontSize: 11 }} width={52} tickFormatter={(v: number) => v.toLocaleString()} />
-          <Tooltip formatter={(v) => (typeof v === 'number' ? v.toLocaleString(undefined, { maximumFractionDigits: 2 }) : String(v ?? ''))} />
+          <Tooltip formatter={tooltipFmt} />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           {numKeys.map((k, i) => (
             <Line key={k} type="monotone" dataKey={k} name={fmtKey(k)}
-              stroke={CHART_COLORS[i % CHART_COLORS.length]} dot={false} strokeWidth={2} />
+              stroke={COLORS[i % COLORS.length]} dot={false} strokeWidth={2} />
           ))}
         </LineChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function BarChartViz({ rows, catKey }: { rows: Record<string, unknown>[]; catKey: string }) {
+  const numKeys = Object.keys(rows[0])
+    .filter(k => k !== catKey && isNum(rows[0][k]) && !META_KEYS.has(k))
+    .slice(0, 4)
+  return (
+    <div className="w-full h-52 mt-3 mb-1">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={rows} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <XAxis dataKey={catKey} tick={{ fontSize: 11 }} />
+          <YAxis tick={{ fontSize: 11 }} width={52} tickFormatter={(v: number) => v.toLocaleString()} />
+          <Tooltip formatter={tooltipFmt} />
+          {numKeys.length > 1 && <Legend wrapperStyle={{ fontSize: 11 }} />}
+          {numKeys.map((k, i) => (
+            <Bar key={k} dataKey={k} name={fmtKey(k)}
+              fill={COLORS[i % COLORS.length]} radius={[3, 3, 0, 0]} />
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function PieChartViz({ data }: { data: { name: string; value: number }[] }) {
+  return (
+    <div className="w-full h-56 mt-3 mb-1">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie data={data} dataKey="value" nameKey="name"
+            cx="50%" cy="50%" outerRadius={90} innerRadius={40}
+            paddingAngle={2}
+            label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(1)}%`}
+            labelLine={false}
+          >
+            {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+          </Pie>
+          <Tooltip formatter={tooltipFmt} />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+        </PieChart>
       </ResponsiveContainer>
     </div>
   )
@@ -141,6 +195,17 @@ function StatGrid({ obj }: { obj: Record<string, unknown> }) {
 
 // ─── anomaly cards ────────────────────────────────────────────────────────────
 
+function severityStyle(s: string) {
+  if (s === 'HIGH') return 'bg-red-50 border-red-200'
+  if (s === 'MEDIUM') return 'bg-amber-50 border-amber-200'
+  return 'bg-sky-50 border-sky-200'
+}
+function severityBadge(s: string) {
+  if (s === 'HIGH') return 'bg-red-100 text-red-700 border-red-200'
+  if (s === 'MEDIUM') return 'bg-amber-100 text-amber-700 border-amber-200'
+  return 'bg-sky-100 text-sky-700 border-sky-200'
+}
+
 function AnomalyCard({ item }: { item: Record<string, unknown> }) {
   const sev = String(item.severity ?? 'LOW')
   return (
@@ -170,14 +235,13 @@ function RenderValue({ label, value, depth = 0 }: {
 
   if (parsed == null) return null
 
+  const labelEl = label
+    ? <p className="text-[10px] font-bold text-black/35 uppercase tracking-widest mb-2">{fmtKey(label)}</p>
+    : null
+
   // ── string ──────────────────────────────────────────────────────────────────
   if (typeof parsed === 'string') {
-    return (
-      <div>
-        {label && <p className="text-[10px] font-bold text-black/35 uppercase tracking-widest mb-1">{fmtKey(label)}</p>}
-        <p className="text-sm text-black/70 leading-relaxed">{parsed}</p>
-      </div>
-    )
+    return <div>{labelEl}<p className="text-sm text-black/70 leading-relaxed">{parsed}</p></div>
   }
 
   // ── number / boolean ────────────────────────────────────────────────────────
@@ -192,14 +256,13 @@ function RenderValue({ label, value, depth = 0 }: {
 
   // ── array ───────────────────────────────────────────────────────────────────
   if (Array.isArray(parsed)) {
-    // empty
     if (!parsed.length) return null
 
-    // primitive list
+    // primitive list → bullets
     if (parsed.every(item => typeof item !== 'object' || item === null)) {
       return (
         <div>
-          {label && <p className="text-[10px] font-bold text-black/35 uppercase tracking-widest mb-1">{fmtKey(label)}</p>}
+          {labelEl}
           <ul className="list-disc list-inside space-y-0.5">
             {(parsed as string[]).map((item, i) => (
               <li key={i} className="text-sm text-black/70">{String(item)}</li>
@@ -211,52 +274,76 @@ function RenderValue({ label, value, depth = 0 }: {
 
     const rows = parsed as Record<string, unknown>[]
 
-    // anomaly list (has severity key)
+    // anomaly list
     if (rows[0]?.severity !== undefined) {
       return (
         <div>
-          {label && <p className="text-[10px] font-bold text-black/35 uppercase tracking-widest mb-2">{fmtKey(label)}</p>}
-          <div className="space-y-2">
-            {rows.map((item, i) => <AnomalyCard key={i} item={item} />)}
-          </div>
+          {labelEl}
+          <div className="space-y-2">{rows.map((item, i) => <AnomalyCard key={i} item={item} />)}</div>
         </div>
       )
     }
 
-    // time series → chart + table
-    if (isTimeSeriesRows(rows)) {
+    // time series → line chart + table
+    const keys = Object.keys(rows[0])
+    const tk = detectTimeKey(keys)
+    const numKeys = keys.filter(k => k !== tk && isNum(rows[0][k]))
+
+    if (tk && numKeys.length) {
       return (
         <div>
-          {label && <p className="text-[10px] font-bold text-black/35 uppercase tracking-widest mb-1">{fmtKey(label)}</p>}
-          <TimeSeriesChart rows={rows} />
+          {labelEl}
+          <LineChartViz rows={rows} />
           <DataTable rows={rows} />
         </div>
       )
     }
 
-    // generic object array → table
-    return (
-      <div>
-        {label && <p className="text-[10px] font-bold text-black/35 uppercase tracking-widest mb-1">{fmtKey(label)}</p>}
-        <DataTable rows={rows} />
-      </div>
-    )
+    // categorical array → bar chart + table
+    const catKey = keys.find(k => typeof rows[0][k] === 'string' && !META_KEYS.has(k))
+    if (catKey && numKeys.length && rows.length <= 20) {
+      return (
+        <div>
+          {labelEl}
+          <BarChartViz rows={rows} catKey={catKey} />
+          <DataTable rows={rows} />
+        </div>
+      )
+    }
+
+    return <div>{labelEl}<DataTable rows={rows} /></div>
   }
 
   // ── object ──────────────────────────────────────────────────────────────────
   const obj = parsed as Record<string, unknown>
   const entries = Object.entries(obj).filter(([, v]) => v != null)
-
   if (!entries.length) return null
 
   const allPrimitive = entries.every(([, v]) => typeof v !== 'object' || v === null)
 
-  // flat object → stat grid (numbers) or key-value list (strings)
+  // flat object
   if (allPrimitive) {
-    const hasNums = entries.some(([, v]) => isNum(v))
+    const numEntries = entries.filter(([, v]) => isNum(v))
+    const total = numEntries.reduce((s, [, v]) => s + (v as number), 0)
+    const isPct = numEntries.length >= 2 && numEntries.length <= 10 && Math.abs(total - 100) < 2
+
+    // percentage breakdown → pie chart
+    if (isPct) {
+      const pieData = numEntries.map(([k, v]) => ({ name: fmtKey(k), value: v as number }))
+      return <div>{labelEl}<PieChartViz data={pieData} /></div>
+    }
+
+    // small set of comparable numbers → bar chart
+    if (numEntries.length >= 2 && numEntries.length <= 10 && entries.every(([, v]) => isNum(v))) {
+      const barRows = numEntries.map(([k, v]) => ({ _cat: fmtKey(k), value: v as number }))
+      return <div>{labelEl}<BarChartViz rows={barRows} catKey="_cat" /></div>
+    }
+
+    // mixed or large → stat grid
+    const hasNums = numEntries.length > 0
     return (
       <div>
-        {label && <p className="text-[10px] font-bold text-black/35 uppercase tracking-widest mb-1">{fmtKey(label)}</p>}
+        {labelEl}
         {hasNums ? (
           <StatGrid obj={obj} />
         ) : (
@@ -273,7 +360,41 @@ function RenderValue({ label, value, depth = 0 }: {
     )
   }
 
-  // mixed / nested object — at depth 0 each key gets a card, deeper just indents
+  // object of sub-objects (e.g. quarterly_revenue, annual_cohort_totals)
+  const { subObjs, primitives } = partitionObj(obj)
+  const isObjOfObjs = subObjs.length >= 2 && subObjs.length <= 10
+    && subObjs.every(([, v]) => Object.values(v).some(isNum))
+
+  if (isObjOfObjs) {
+    const rows = objOfObjsToRows(Object.fromEntries(subObjs))
+    const pctKey = pickPieKey(subObjs[0][1])
+    const isPct = pctKey && /pct|share|percent/i.test(pctKey)
+      && (() => {
+        const total = subObjs.reduce((s, [, v]) => s + (isNum(v[pctKey!]) ? (v[pctKey!] as number) : 0), 0)
+        return Math.abs(total - 100) < 5
+      })()
+
+    return (
+      <div className="space-y-3">
+        {labelEl}
+        {isPct ? (
+          // share-based → pie + bar side by side on larger screens
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <PieChartViz data={subObjs.map(([k, v]) => ({ name: fmtKey(k), value: (v[pctKey!] as number) ?? 0 }))} />
+            <BarChartViz rows={rows} catKey="_cat" />
+          </div>
+        ) : (
+          <BarChartViz rows={rows} catKey="_cat" />
+        )}
+        <DataTable rows={rows} />
+        {primitives.length > 0 && (
+          <StatGrid obj={Object.fromEntries(primitives.filter(([, v]) => isNum(v)))} />
+        )}
+      </div>
+    )
+  }
+
+  // mixed / nested — at depth 0 wrap each key in a card
   if (depth === 0) {
     return (
       <div className="space-y-4">
@@ -289,7 +410,7 @@ function RenderValue({ label, value, depth = 0 }: {
 
   return (
     <div className="space-y-4">
-      {label && <p className="text-[10px] font-bold text-black/35 uppercase tracking-widest">{fmtKey(label)}</p>}
+      {labelEl}
       {entries.filter(([k]) => !META_KEYS.has(k)).map(([k, v]) => (
         <RenderValue key={k} label={k} value={v} depth={depth + 1} />
       ))}
@@ -321,7 +442,6 @@ export default function ReportRenderer({ report, title, onExportPdf, onExportXls
     return (
       <div className="text-center py-10">
         <p className="text-sm text-black/30">Report is empty</p>
-        <p className="text-xs text-black/20 mt-1">The workflow completed but produced no output.</p>
       </div>
     )
   }
@@ -362,7 +482,7 @@ export default function ReportRenderer({ report, title, onExportPdf, onExportXls
         </div>
       ))}
 
-      {/* Eval quality scores */}
+      {/* Eval scores */}
       {evalResult?.scores && (
         <div className="border border-black/8 rounded-xl p-4 bg-black/[0.01]">
           <p className="text-[10px] font-bold text-black/35 uppercase tracking-widest mb-3">Quality Scores</p>
